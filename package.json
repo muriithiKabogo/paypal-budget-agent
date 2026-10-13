@@ -1,0 +1,21 @@
+{
+  "name": "paypal-budget-agent",
+  "version": "1.0.0",
+  "description": "",
+  "main": "paypal_budget.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/muriithiKabogo/paypal-budget-agent.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/muriithiKabogo/paypal-budget-agent/issues"
+  },
+  "homepage": "https://github.com/muriithiKabogo/paypal-budget-agent#readme"
+}
