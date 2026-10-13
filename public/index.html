@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PayPal Budget Agent</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>PayPal Budget Agent</h1>
+        <div id="status-container">
+            <h2>Current Status</h2>
+            <p><strong>Total Budget:</strong> <span id="total-budget"></span></p>
+            <p><strong>Spent:</strong> <span id="spent-budget"></span></p>
+            <p><strong>Remaining:</strong> <span id="remaining-budget"></span></p>
+        </div>
+        <div id="transaction-container">
+            <h2>New Transaction</h2>
+            <form id="transaction-form">
+                <input type="number" id="transaction-amount" placeholder="Amount" step="0.01" required>
+                <button type="submit">Submit</button>
+            </form>
+        </div>
+        <div id="log-container">
+            <h2>Transaction Log</h2>
+            <ul id="transaction-log"></ul>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>

@@ -1,25 +1,22 @@
 # PayPal Budget Agent
 
-This project implements an autonomous agent that manages a predefined budget by interacting with the PayPal API. It runs as a web service that can approve or deny transactions based on its budget constraints.
+This agent manages a predefined budget and approves or denies transactions based on the remaining funds. It's designed to be a simple, autonomous agent that can be used as a starting point for more complex financial agents.
+
+This project was created as a submission for an AI hackathon.
 
 ## Features
 
-- **Budget Enforcement:** The agent maintains a fixed budget and will not approve transactions that exceed the remaining balance.
-- **PayPal Integration:** Creates real PayPal Sandbox orders for approved transactions.
-- **Order Verification:** Includes a crucial verification step where every created order is re-fetched from the PayPal API to confirm its status before the agent's internal state is updated.
-- **API Interface:** Exposes simple REST endpoints to check the agent's status and request new transactions.
+-   **Budget Management:** The agent has a fixed budget and keeps track of its spending.
+-   **Transaction Handling:** It can approve or deny transactions based on the available budget.
+-   **PayPal Integration (Simulated):** The agent simulates creating and verifying PayPal orders.
+-   **Web UI:** A simple web interface to view the agent's status and submit transactions.
 
-## Prerequisites
-
-- Node.js
-- npm
-
-## Setup
+## Quick Start
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/Conway-Research/automaton.git
-    cd automaton
+    git clone <repository-url>
+    cd paypal-budget-agent
     ```
 
 2.  **Install dependencies:**
@@ -27,81 +24,66 @@ This project implements an autonomous agent that manages a predefined budget by 
     npm install
     ```
 
-3.  **Create an environment file:**
-    Create a file named `.env` in the root of the project and add your PayPal Sandbox API credentials:
-    ```
-    PAYPAL_CLIENT_ID=YOUR_SANDBOX_CLIENT_ID
-    PAYPAL_CLIENT_SECRET=YOUR_SANDBOX_CLIENT_SECRET
+3.  **Start the agent:**
+    ```bash
+    node src/server.js
     ```
 
-## Running the Agent
+4.  **Open the Web UI:**
+    Open your web browser and navigate to `http://localhost:3000`.
 
-Start the server using the following command:
+## Web UI
 
-```bash
-node src/server.js
-```
+The web UI provides a simple interface to interact with the agent.
 
-The server will start on port 3000 and you should see a confirmation message in the console.
+-   **Current Status:** Displays the total budget, the amount spent, and the remaining balance. The status polls the server every 5 seconds to provide live updates.
+-   **New Transaction:** A form to submit a new transaction. Enter an amount and click "Submit".
+-   **Transaction Log:** A running list of all transaction requests and their outcomes (approved or denied).
 
 ## API Endpoints
 
-### 1. Get Agent Status
+You can also interact with the agent directly via its API:
 
--   **URL:** `/status`
--   **Method:** `GET`
--   **Description:** Retrieves the current financial state of the agent.
--   **Example:**
-    ```bash
-    curl http://localhost:3000/status
-    ```
--   **Success Response:**
-    ```json
-    {
-        "budget": 100,
-        "currentSpending": 0,
-        "remainingBudget": 100
-    }
-    ```
+### `GET /status`
 
-### 2. Request a Transaction
+Returns the current state of the agent's budget.
 
--   **URL:** `/transaction`
--   **Method:** `POST`
--   **Description:** Submits a new transaction request for the agent to approve. If approved, a PayPal order is created and verified.
--   **Body:**
-    ```json
-    {
-        "amount": 25.50
-    }
-    ```
--   **Example:**
-    ```bash
-    curl -X POST -H "Content-Type: application/json" -d '{"amount": 25.50}' http://localhost:3000/transaction
-    ```
--   **Success Response:**
-    ```json
-    {
-        "success": true,
-        "message": "Successfully processed and verified PayPal order YOUR_ORDER_ID with status CREATED.",
-        "orderId": "YOUR_ORDER_ID",
-        "verifiedStatus": "CREATED",
-        "state": {
-            "budget": 100,
-            "currentSpending": 25.5,
-            "remainingBudget": 74.5
-        }
-    }
-    ```
--   **Failure Response (Exceeds Budget):**
-    ```json
-    {
-        "success": false,
-        "message": "DENIED: Transaction of $80.00 would exceed the budget.",
-        "state": {
-            "budget": 100,
-            "currentSpending": 25.5,
-            "remainingBudget": 74.5
-        }
-    }
-    ```
+**Example Response:**
+
+```json
+{
+  "budget": 100,
+  "currentSpending": 25.5,
+  "remainingBudget": 74.5
+}
+```
+
+### `POST /transaction`
+
+Submits a new transaction request.
+
+**Request Body:**
+
+```json
+{
+  "amount": 10.50
+}
+```
+
+**Success Response (Approved):**
+
+```json
+{
+  "success": true,
+  "message": "Transaction approved. Verified PayPal Order ID: 2XF36472Y1125264L"
+}
+```
+
+**Error Response (Denied):**
+
+```json
+{
+  "success": false,
+  "message": "Transaction denied. Amount exceeds remaining budget."
+}
+```

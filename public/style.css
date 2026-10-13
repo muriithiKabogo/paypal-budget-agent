@@ -1,0 +1,68 @@
+body {
+    font-family: sans-serif;
+    margin: 0;
+    padding: 20px;
+    background-color: #f4f4f4;
+}
+
+.container {
+    max-width: 600px;
+    margin: auto;
+    background: #fff;
+    padding: 20px;
+    border-radius: 5px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+h1, h2 {
+    text-align: center;
+}
+
+#status-container, #transaction-container, #log-container {
+    margin-bottom: 20px;
+}
+
+#transaction-form {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#transaction-form input {
+    width: 60%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+}
+
+#transaction-form button {
+    padding: 10px 20px;
+    border: none;
+    background-color: #0070ba;
+    color: white;
+    border-radius: 3px;
+    cursor: pointer;
+    margin-left: 10px;
+}
+
+#transaction-form button:hover {
+    background-color: #005ea6;
+}
+
+#transaction-log {
+    list-style: none;
+    padding: 0;
+}
+
+#transaction-log li {
+    padding: 10px;
+    border-bottom: 1px solid #eee;
+}
+
+#transaction-log li.success {
+    color: green;
+}
+
+#transaction-log li.error {
+    color: red;
+}

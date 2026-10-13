@@ -1,9 +1,13 @@
 
 const express = require('express');
+const path = require('path');
 const { handleTransactionRequest, getAgentState } = require('./agent'); // Renaming index to agent for clarity
 
 const app = express();
 const port = process.env.PORT || 3000;
+
+// Serve static files from the 'public' directory
+app.use(express.static(path.join(__dirname, '..', 'public')));
 
 app.use(express.json());
 
@@ -35,4 +39,5 @@ app.listen(port, () => {
     console.log('Endpoints:');
     console.log('  GET /status         - Check the agent\'s current budget and spending.');
     console.log('  POST /transaction   - Request a new transaction. Body: { "amount": 10.50 }');
+    console.log(`UI available at http://localhost:${port}`);
 });
