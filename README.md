@@ -1,45 +1,60 @@
 # PayPal Budget Agent
 
-This project is an autonomous budget agent built for the PayPal AI Hackathon. It manages a fixed spending budget on behalf of a user, with a web UI to accept transaction requests and display the current budget status. The agent decides whether to approve or deny transactions based on the remaining budget and integrates with the PayPal API to create and verify orders for approved transactions.
+A simple web service that acts as a budget-conscious agent for PayPal transactions. It uses the Gemini API to categorize transactions and make approval decisions based on a configurable budget and allowed spending categories.
 
 ## Features
 
--   **Autonomous Budget Management:** The agent automatically manages a fixed budget, approving or denying transactions based on the available funds.
--   **Web UI:** A simple web interface allows users to submit transaction requests and view the current budget status in real-time.
--   **PayPal Integration:** The agent integrates with the PayPal API to create and verify orders for approved transactions.
--   **Budget Reload:** The agent's budget can be reloaded at any time through the web UI.
+*   **Budget Management:** Set a total budget and track spending. The agent will deny any transaction that exceeds the remaining budget.
+*   **Transaction Categorization:** Uses the Gemini API to intelligently categorize transactions based on their description.
+*   **Allowed Spending Categories:** Define a list of allowed spending categories. The agent will deny any transaction that does not fall into one of these categories.
+*   **Web UI:** A simple web interface to view the current budget, spending, remaining budget, allowed categories, and transaction history.
+*   **REST API:** A simple REST API to manage the agent's state.
 
-## Getting Started
+## API
 
-### Prerequisites
+### GET /
 
--   Node.js and npm
--   A PayPal developer account with API credentials (client ID and secret)
+Returns the HTML for the web UI.
 
-### Installation
+### GET /state
+
+Returns the current state of the agent as a JSON object.
+
+### POST /transaction
+
+Processes a new transaction. The request body should be a JSON object with the following properties:
+
+*   `amount`: The transaction amount (number).
+*   `description`: The transaction description (string).
+
+The response will be a JSON object indicating whether the transaction was approved or denied, along with the reason.
+
+### GET /categories
+
+Returns the current list of allowed spending categories as a JSON object.
+
+### PUT /categories
+
+Updates the list of allowed spending categories. The request body should be a JSON object with a single property, `categories`, which is an array of strings.
+
+## Quick Start
 
 1.  Clone the repository:
     ```bash
-    git clone https://github.com/your-username/paypal-budget-agent.git
+    git clone <repository-url>
     ```
 2.  Install the dependencies:
     ```bash
     npm install
     ```
-3.  Create a `.env` file in the root of the project and add your PayPal API credentials:
+3.  Create a `.env` file with your PayPal API credentials and Gemini API key:
     ```
-    PAYPAL_CLIENT_ID=YOUR_CLIENT_ID
-    PAYPAL_CLIENT_SECRET=YOUR_CLIENT_SECRET
+    PAYPAL_CLIENT_ID=your-paypal-client-id
+    PAYPAL_CLIENT_SECRET=your-paypal-client-secret
+    GEMINI_API_KEY=your-gemini-api-key
     ```
-
-### Running the Application
-
-1.  Start the server:
+4.  Start the server:
     ```bash
     node src/server.js
     ```
-2.  Open your browser and navigate to `http://localhost:3000` to view the web UI.
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+5.  Open your browser and navigate to `http://localhost:3000`.
