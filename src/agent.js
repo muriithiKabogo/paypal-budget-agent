@@ -3,7 +3,7 @@ require('dotenv').config();
 const { createOrder, verifyOrder } = require('./paypal');
 
 // --- Agent Configuration & State ---
-const BUDGET_USD = 100.00; // The agent's total budget
+let budgetUsd = 100.00; // The agent's total budget
 let currentSpending = 0.00; // The agent's current total spending
 
 /**
@@ -17,7 +17,7 @@ async function handleTransactionRequest(requestedAmount) {
     const currentState = getAgentState();
     console.log(`Current Spending: $${currentState.currentSpending.toFixed(2)} / Budget: $${currentState.budget.toFixed(2)}`);
 
-    if (currentSpending + requestedAmount > BUDGET_USD) {
+    if (currentSpending + requestedAmount > budgetUsd) {
         const message = `DENIED: Transaction of $${requestedAmount.toFixed(2)} would exceed the budget.`;
         console.error(message);
         return { success: false, message, state: getAgentState() };
@@ -62,13 +62,29 @@ async function handleTransactionRequest(requestedAmount) {
  */
 function getAgentState() {
     return {
-        budget: BUDGET_USD,
+        budget: budgetUsd,
         currentSpending: currentSpending,
-        remainingBudget: BUDGET_USD - currentSpending,
+        remainingBudget: budgetUsd - currentSpending,
     };
+}
+
+/**
+ * Sets a new budget for the agent and resets spending.
+ * @param {number} newBudget - The new total budget.
+ * @returns {object} The updated agent state.
+ */
+function reloadBudget(newBudget) {
+    if (typeof newBudget === 'number' && newBudget > 0) {
+        budgetUsd = newBudget;
+        currentSpending = 0; // Reset spending when budget is reloaded
+        console.log(`--- Budget Reloaded: New Budget is $${budgetUsd.toFixed(2)} ---`);
+        return { success: true, message: `Budget reloaded. New budget: ${newBudget}`, state: getAgentState() };
+    }
+    return { success: false, message: 'Invalid budget amount.', state: getAgentState() };
 }
 
 module.exports = {
     handleTransactionRequest,
     getAgentState,
+    reloadBudget,
 };
