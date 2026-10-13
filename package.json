@@ -19,6 +19,8 @@
   },
   "homepage": "https://github.com/muriithiKabogo/paypal-budget-agent#readme",
   "dependencies": {
+    "@paypal/checkout-server-sdk": "^1.0.3",
+    "axios": "^1.20.0",
     "express": "^5.3.0"
   }
 }

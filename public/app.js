@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const remainingBudgetEl = document.getElementById('remaining-budget');
     const transactionForm = document.getElementById('transaction-form');
     const transactionAmountEl = document.getElementById('transaction-amount');
+    const transactionDescriptionEl = document.getElementById('transaction-description');
     const reloadForm = document.getElementById('reload-form');
     const reloadAmountEl = document.getElementById('reload-amount');
     const transactionLogEl = document.getElementById('transaction-log');
@@ -19,16 +20,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateStatusUI(state) {
-        totalBudgetEl.textContent = state.budget.toFixed(2);
-        spentBudgetEl.textContent = state.currentSpending.toFixed(2);
-        remainingBudgetEl.textContent = state.remainingBudget.toFixed(2);
+        totalBudgetEl.textContent = `$${state.budget.toFixed(2)}`;
+        spentBudgetEl.textContent = `$${state.currentSpending.toFixed(2)}`;
+        remainingBudgetEl.textContent = `$${state.remainingBudget.toFixed(2)}`;
     }
 
     async function handleTransactionSubmit(event) {
         event.preventDefault();
         const amount = parseFloat(transactionAmountEl.value);
+        const description = transactionDescriptionEl.value;
+
         if (isNaN(amount) || amount <= 0) {
             alert('Please enter a valid amount.');
+            return;
+        }
+        if (!description) {
+            alert('Please enter a description for the transaction.');
             return;
         }
 
@@ -38,14 +45,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ amount }),
+                body: JSON.stringify({ amount, description }),
             });
             const result = await response.json();
-            logTransaction(result);
+            logTransaction(result, amount, description);
             if (result.state) {
                 updateStatusUI(result.state);
             }
             transactionAmountEl.value = '';
+            transactionDescriptionEl.value = '';
         } catch (error) {
             console.error('Error submitting transaction:', error);
             logTransaction({ success: false, message: 'An unknown error occurred.' });
@@ -69,7 +77,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ newBudget }),
             });
             const result = await response.json();
-            logTransaction(result);
+            logTransaction(result); // Reload doesn't need amount/desc
             if (result.state) {
                 updateStatusUI(result.state);
             }
@@ -80,15 +88,25 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function logTransaction(result) {
+    function logTransaction(result, amount, description) {
         const logItem = document.createElement('li');
+        let prefix = '';
+        let message = result.message || result.error;
+
         if (result.success) {
             logItem.className = 'success';
-            logItem.textContent = `INFO: ${result.message}`;
+            prefix = `APPROVED ($${amount.toFixed(2)} for "${description}")`;
         } else {
             logItem.className = 'error';
-            logItem.textContent = `ERROR: ${result.message || result.error}`;
+            prefix = `DENIED ($${amount.toFixed(2)} for "${description}")`;
         }
+        
+        // Use the model's reasoning if available
+        if (result.reason) {
+            message = result.reason;
+        }
+
+        logItem.innerHTML = `<strong>${prefix}:</strong> ${message}`;
         transactionLogEl.prepend(logItem);
     }
 

@@ -1,65 +1,101 @@
 
 require('dotenv').config();
+const axios = require('axios');
 const { createOrder, verifyOrder } = require('./paypal');
 
 // --- Agent Configuration & State ---
-let budgetUsd = 100.00; // The agent's total budget
-let currentSpending = 0.00; // The agent's current total spending
+let budgetUsd = 100.00;
+let currentSpending = 0.00;
+const transactionHistory = []; // To give the model context
+
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`;
+
 
 /**
- * The core decision-making logic of the agent.
- * Decides whether to approve a transaction, creates a PayPal order, and verifies it.
- * @param {number} requestedAmount - The amount of the proposed transaction.
- * @returns {Promise<object>} A result object indicating success or failure.
+ * Calls the Gemini API to get a reasoned decision on a transaction.
+ * @param {number} amount - The transaction amount.
+ * @param {string} description - The transaction description.
+ * @param {object} state - The current agent state.
+ * @returns {Promise<{decision: 'APPROVE'|'DENY', reason: string}>}
  */
-async function handleTransactionRequest(requestedAmount) {
-    console.log(`\n--- New Transaction Request: $${requestedAmount.toFixed(2)} ---`);
-    const currentState = getAgentState();
-    console.log(`Current Spending: $${currentState.currentSpending.toFixed(2)} / Budget: $${currentState.budget.toFixed(2)}`);
-
-    if (currentSpending + requestedAmount > budgetUsd) {
-        const message = `DENIED: Transaction of $${requestedAmount.toFixed(2)} would exceed the budget.`;
-        console.error(message);
-        return { success: false, message, state: getAgentState() };
+async function getGeminiDecision(amount, description, state) {
+    if (!GEMINI_API_KEY) {
+        console.warn("GEMINI_API_KEY not found. Approving transaction based on budget only.");
+        return { decision: 'APPROVE', reason: 'Automatic approval due to missing Gemini API key.' };
     }
 
-    console.log(`APPROVED: Transaction is within budget.`);
-    
-    // 1. Create the order
-    const createdOrder = await createOrder(requestedAmount);
-    if (!createdOrder) {
-        const message = "Failed to process transaction: Could not create PayPal order.";
-        console.error(message);
-        return { success: false, message, state: getAgentState() };
-    }
+    const historySummary = transactionHistory.slice(-5).map(t => `$${t.amount.toFixed(2)} for "${t.description}"`).join('; ') || 'None';
 
-    // 2. Verify the order with a separate API call
-    const verifiedOrder = await verifyOrder(createdOrder.id);
-    if (!verifiedOrder) {
-        const message = `CRITICAL: Order ${createdOrder.id} was created but FAILED verification. Rolling back.`;
-        console.error(message);
-        // NOTE: In a real system, we might add this to a retry queue or alert a human.
-        return { success: false, message, orderId: createdOrder.id, state: getAgentState() };
-    }
+    const prompt = `
+        You are a meticulous budget agent. Your task is to approve or deny transactions based on a user's request.
+        Your decision should be based on the transaction's description, amount, and the user's current budget status.
+        Deny transactions that look suspicious, are for non-essential items when the budget is low, or are poorly described.
 
-    // 3. Only update state after successful creation AND verification
-    currentSpending += requestedAmount;
-    const message = `Successfully processed and verified PayPal order ${verifiedOrder.id} with status ${verifiedOrder.status}.`;
-    console.log(`${message} New spending total: $${currentSpending.toFixed(2)}`);
-    
-    return { 
-        success: true, 
-        message, 
-        orderId: verifiedOrder.id, 
-        verifiedStatus: verifiedOrder.status,
-        state: getAgentState() 
-    };
+        Current Budget Status:
+        - Total Budget: $${state.budget.toFixed(2)}
+        - Current Spending: $${state.currentSpending.toFixed(2)}
+        - Remaining Budget: $${state.remainingBudget.toFixed(2)}
+
+        Recent Transactions: ${historySummary}
+
+        Transaction to evaluate:
+        - Amount: $${amount.toFixed(2)}
+        - Description: "${description}"
+
+        Your response MUST be in JSON format with two keys: "decision" (either "APPROVE" or "DENY") and "reason" (a concise, one-sentence explanation for your decision).
+    `;
+
+    try {
+        const response = await axios.post(GEMINI_API_URL, {
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+                response_mime_type: "application/json",
+            }
+        });
+
+        const content = response.data.candidates[0].content.parts[0].text;
+        return JSON.parse(content);
+    } catch (error) {
+        console.error("Error calling Gemini API:", error.response ? error.response.data : error.message);
+        return { decision: 'DENY', reason: 'Failed to get a decision from the model due to an internal error.' };
+    }
 }
 
-/**
- * Returns the current state of the agent's finances.
- * @returns {object} The agent's current budget and spending.
- */
+async function handleTransactionRequest(amount, description) {
+    console.log(`\n--- New Transaction Request: $${amount.toFixed(2)} for "${description}" ---`);
+    const state = getAgentState();
+
+    // 1. Hard budget check (non-negotiable)
+    if (state.currentSpending + amount > state.budget) {
+        const reason = `DENIED: Transaction of $${amount.toFixed(2)} would exceed the budget.`;
+        console.error(reason);
+        return { success: false, reason, state };
+    }
+
+    // 2. AI-driven decision making
+    const modelDecision = await getGeminiDecision(amount, description, state);
+    console.log(`Model Decision: ${modelDecision.decision}. Reason: ${modelDecision.reason}`);
+
+    if (modelDecision.decision !== 'APPROVE') {
+        return { success: false, reason: modelDecision.reason, state };
+    }
+
+    // 3. Proceed with PayPal order if approved
+    const createdOrder = await createOrder(amount);
+    if (!createdOrder) {
+        const reason = "Failed to process transaction: Could not create PayPal order.";
+        return { success: false, reason, state };
+    }
+    
+    // In a real scenario, we'd wait for capture, but for this hackathon, we assume immediate capture on creation.
+    currentSpending += amount;
+    transactionHistory.push({ amount, description, date: new Date() });
+    
+    const message = `Successfully processed PayPal order ${createdOrder.id}.`;
+    return { success: true, message, orderId: createdOrder.id, reason: modelDecision.reason, state: getAgentState() };
+}
+
 function getAgentState() {
     return {
         budget: budgetUsd,
@@ -68,17 +104,12 @@ function getAgentState() {
     };
 }
 
-/**
- * Sets a new budget for the agent and resets spending.
- * @param {number} newBudget - The new total budget.
- * @returns {object} The updated agent state.
- */
 function reloadBudget(newBudget) {
     if (typeof newBudget === 'number' && newBudget > 0) {
         budgetUsd = newBudget;
-        currentSpending = 0; // Reset spending when budget is reloaded
-        console.log(`--- Budget Reloaded: New Budget is $${budgetUsd.toFixed(2)} ---`);
-        return { success: true, message: `Budget reloaded. New budget: ${newBudget}`, state: getAgentState() };
+        currentSpending = 0;
+        transactionHistory.length = 0; // Clear history on reload
+        return { success: true, message: `Budget reloaded. New budget: $${newBudget.toFixed(2)}`, state: getAgentState() };
     }
     return { success: false, message: 'Invalid budget amount.', state: getAgentState() };
 }

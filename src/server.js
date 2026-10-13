@@ -1,56 +1,49 @@
 
 const express = require('express');
 const path = require('path');
-const { handleTransactionRequest, getAgentState, reloadBudget } = require('./agent'); // Renaming index to agent for clarity
+const { handleTransactionRequest, getAgentState, reloadBudget } = require('./agent');
 
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Serve static files from the 'public' directory
 app.use(express.static(path.join(__dirname, '..', 'public')));
-
 app.use(express.json());
 
-// Endpoint to handle a new transaction request
 app.post('/transaction', async (req, res) => {
-    const { amount } = req.body;
+    const { amount, description } = req.body;
 
     if (typeof amount !== 'number' || amount <= 0) {
-        return res.status(400).json({ error: 'Invalid "amount" in request body. Must be a positive number.' });
+        return res.status(400).json({ error: 'Invalid "amount" in request body.' });
+    }
+    if (typeof description !== 'string' || description.trim() === '') {
+        return res.status(400).json({ error: 'A non-empty "description" is required.' });
     }
 
-    const result = await handleTransactionRequest(amount);
+    const result = await handleTransactionRequest(amount, description);
 
     if (result.success) {
         res.status(200).json(result);
     } else {
+        // Use 400 for client-side errors (like budget exceeded or model denial)
         res.status(400).json(result);
     }
 });
 
-// Endpoint to get the current state of the agent (budget, spending)
 app.get('/status', (req, res) => {
     const state = getAgentState();
     res.status(200).json(state);
 });
 
-// Endpoint to reload the budget
 app.post('/reload', (req, res) => {
     const { newBudget } = req.body;
-
     if (typeof newBudget !== 'number' || newBudget <= 0) {
-        return res.status(400).json({ error: 'Invalid "newBudget" in request body. Must be a positive number.' });
+        return res.status(400).json({ error: 'Invalid "newBudget" in request body.' });
     }
-
     const result = reloadBudget(newBudget);
     res.status(200).json(result);
 });
 
 app.listen(port, () => {
     console.log(`PayPal Budget Agent server listening at http://localhost:${port}`);
-    console.log('Endpoints:');
-    console.log('  GET /status         - Check the agent\'s current budget and spending.');
-    console.log('  POST /transaction   - Request a new transaction. Body: { "amount": 10.50 }');
-    console.log('  POST /reload        - Reload the budget. Body: { "newBudget": 200 }');
     console.log(`UI available at http://localhost:${port}`);
 });
