@@ -1,7 +1,7 @@
 
 const express = require('express');
 const path = require('path');
-const { handleTransactionRequest, getAgentState, reloadBudget } = require('./agent');
+const { handleTransactionRequest, getAgentState, reloadBudget, updateCategories } = require('./agent');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -24,7 +24,6 @@ app.post('/transaction', async (req, res) => {
     if (result.success) {
         res.status(200).json(result);
     } else {
-        // Use 400 for client-side errors (like budget exceeded or model denial)
         res.status(400).json(result);
     }
 });
@@ -41,6 +40,24 @@ app.post('/reload', (req, res) => {
     }
     const result = reloadBudget(newBudget);
     res.status(200).json(result);
+});
+
+app.get('/categories', (req, res) => {
+    const state = getAgentState();
+    res.status(200).json({ allowedCategories: state.allowedCategories });
+});
+
+app.put('/categories', (req, res) => {
+    const { categories } = req.body;
+    if (!Array.isArray(categories)) {
+        return res.status(400).json({ error: 'Request body must be an object with a "categories" array.' });
+    }
+    const result = updateCategories(categories);
+    if (result.success) {
+        res.status(200).json(result);
+    } else {
+        res.status(400).json(result);
+    }
 });
 
 app.listen(port, () => {
