@@ -48,12 +48,31 @@ async function createOrder(amount, currency = 'USD') {
         console.log(`Successfully created order with ID: ${order.result.id}`);
         return order.result;
     } catch (err) {
-        console.error("Failed to create PayPal order:");
-        console.error(err.message);
+        console.error("Failed to create PayPal order:", err.message);
+        return null;
+    }
+}
+
+/**
+ * Verifies an order by fetching its details from the PayPal API.
+ * @param {string} orderId - The ID of the order to verify.
+ * @returns {Promise<object|null>} The order details or null on failure.
+ */
+async function verifyOrder(orderId) {
+    const request = new checkoutNodeJssdk.orders.OrdersGetRequest(orderId);
+
+    try {
+        console.log(`Verifying order with ID: ${orderId}...`);
+        const order = await client().execute(request);
+        console.log(`Successfully verified order. Status: ${order.result.status}`);
+        return order.result;
+    } catch (err) {
+        console.error(`Failed to verify PayPal order ${orderId}:`, err.message);
         return null;
     }
 }
 
 module.exports = {
-    createOrder
+    createOrder,
+    verifyOrder,
 };

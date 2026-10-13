@@ -1,6 +1,6 @@
 
 require('dotenv').config();
-const { createOrder } = require('./paypal');
+const { createOrder, verifyOrder } = require('./paypal');
 
 // --- Agent Configuration & State ---
 const BUDGET_USD = 100.00; // The agent's total budget
@@ -8,7 +8,7 @@ let currentSpending = 0.00; // The agent's current total spending
 
 /**
  * The core decision-making logic of the agent.
- * Decides whether to approve a transaction and create a PayPal order.
+ * Decides whether to approve a transaction, creates a PayPal order, and verifies it.
  * @param {number} requestedAmount - The amount of the proposed transaction.
  * @returns {Promise<object>} A result object indicating success or failure.
  */
@@ -25,18 +25,35 @@ async function handleTransactionRequest(requestedAmount) {
 
     console.log(`APPROVED: Transaction is within budget.`);
     
-    const order = await createOrder(requestedAmount);
-
-    if (order) {
-        currentSpending += requestedAmount;
-        const message = `Successfully processed transaction and created PayPal order ${order.id}.`;
-        console.log(`${message} New spending total: $${currentSpending.toFixed(2)}`);
-        return { success: true, message, orderId: order.id, state: getAgentState() };
-    } else {
+    // 1. Create the order
+    const createdOrder = await createOrder(requestedAmount);
+    if (!createdOrder) {
         const message = "Failed to process transaction: Could not create PayPal order.";
         console.error(message);
         return { success: false, message, state: getAgentState() };
     }
+
+    // 2. Verify the order with a separate API call
+    const verifiedOrder = await verifyOrder(createdOrder.id);
+    if (!verifiedOrder) {
+        const message = `CRITICAL: Order ${createdOrder.id} was created but FAILED verification. Rolling back.`;
+        console.error(message);
+        // NOTE: In a real system, we might add this to a retry queue or alert a human.
+        return { success: false, message, orderId: createdOrder.id, state: getAgentState() };
+    }
+
+    // 3. Only update state after successful creation AND verification
+    currentSpending += requestedAmount;
+    const message = `Successfully processed and verified PayPal order ${verifiedOrder.id} with status ${verifiedOrder.status}.`;
+    console.log(`${message} New spending total: $${currentSpending.toFixed(2)}`);
+    
+    return { 
+        success: true, 
+        message, 
+        orderId: verifiedOrder.id, 
+        verifiedStatus: verifiedOrder.status,
+        state: getAgentState() 
+    };
 }
 
 /**
