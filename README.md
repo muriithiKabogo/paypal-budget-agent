@@ -1,89 +1,45 @@
 # PayPal Budget Agent
 
-This agent manages a predefined budget and approves or denies transactions based on the remaining funds. It's designed to be a simple, autonomous agent that can be used as a starting point for more complex financial agents.
-
-This project was created as a submission for an AI hackathon.
+This project is an autonomous budget agent built for the PayPal AI Hackathon. It manages a fixed spending budget on behalf of a user, with a web UI to accept transaction requests and display the current budget status. The agent decides whether to approve or deny transactions based on the remaining budget and integrates with the PayPal API to create and verify orders for approved transactions.
 
 ## Features
 
--   **Budget Management:** The agent has a fixed budget and keeps track of its spending.
--   **Transaction Handling:** It can approve or deny transactions based on the available budget.
--   **PayPal Integration (Simulated):** The agent simulates creating and verifying PayPal orders.
--   **Web UI:** A simple web interface to view the agent's status and submit transactions.
+-   **Autonomous Budget Management:** The agent automatically manages a fixed budget, approving or denying transactions based on the available funds.
+-   **Web UI:** A simple web interface allows users to submit transaction requests and view the current budget status in real-time.
+-   **PayPal Integration:** The agent integrates with the PayPal API to create and verify orders for approved transactions.
+-   **Budget Reload:** The agent's budget can be reloaded at any time through the web UI.
 
-## Quick Start
+## Getting Started
 
-1.  **Clone the repository:**
+### Prerequisites
+
+-   Node.js and npm
+-   A PayPal developer account with API credentials (client ID and secret)
+
+### Installation
+
+1.  Clone the repository:
     ```bash
-    git clone <repository-url>
-    cd paypal-budget-agent
+    git clone https://github.com/your-username/paypal-budget-agent.git
     ```
-
-2.  **Install dependencies:**
+2.  Install the dependencies:
     ```bash
     npm install
     ```
+3.  Create a `.env` file in the root of the project and add your PayPal API credentials:
+    ```
+    PAYPAL_CLIENT_ID=YOUR_CLIENT_ID
+    PAYPAL_CLIENT_SECRET=YOUR_CLIENT_SECRET
+    ```
 
-3.  **Start the agent:**
+### Running the Application
+
+1.  Start the server:
     ```bash
     node src/server.js
     ```
+2.  Open your browser and navigate to `http://localhost:3000` to view the web UI.
 
-4.  **Open the Web UI:**
-    Open your web browser and navigate to `http://localhost:3000`.
+## License
 
-## Web UI
-
-The web UI provides a simple interface to interact with the agent.
-
--   **Current Status:** Displays the total budget, the amount spent, and the remaining balance. The status polls the server every 5 seconds to provide live updates.
--   **New Transaction:** A form to submit a new transaction. Enter an amount and click "Submit".
--   **Transaction Log:** A running list of all transaction requests and their outcomes (approved or denied).
-
-## API Endpoints
-
-You can also interact with the agent directly via its API:
-
-### `GET /status`
-
-Returns the current state of the agent's budget.
-
-**Example Response:**
-
-```json
-{
-  "budget": 100,
-  "currentSpending": 25.5,
-  "remainingBudget": 74.5
-}
-```
-
-### `POST /transaction`
-
-Submits a new transaction request.
-
-**Request Body:**
-
-```json
-{
-  "amount": 10.50
-}
-```
-
-**Success Response (Approved):**
-
-```json
-{
-  "success": true,
-  "message": "Transaction approved. Verified PayPal Order ID: 2XF36472Y1125264L"
-}
-```
-
-**Error Response (Denied):**
-
-```json
-{
-  "success": false,
-  "message": "Transaction denied. Amount exceeds remaining budget."
-}
-```
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
