@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const reloadForm = document.getElementById('reload-form');
     const reloadAmountEl = document.getElementById('reload-amount');
     const transactionLogEl = document.getElementById('transaction-log');
+    const activityLogEl = document.getElementById('activity-log');
 
     async function fetchStatus() {
         try {
@@ -19,10 +20,30 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    async function fetchActivityLog() {
+        try {
+            const response = await fetch('/activity');
+            const data = await response.json();
+            updateActivityLogUI(data);
+        } catch (error) {
+            console.error('Error fetching activity log:', error);
+        }
+    }
+
     function updateStatusUI(state) {
         totalBudgetEl.textContent = `$${state.budget.toFixed(2)}`;
         spentBudgetEl.textContent = `$${state.currentSpending.toFixed(2)}`;
         remainingBudgetEl.textContent = `$${state.remainingBudget.toFixed(2)}`;
+    }
+
+    function updateActivityLogUI(log) {
+        activityLogEl.innerHTML = ''; // Clear the list
+        log.forEach(entry => {
+            const logItem = document.createElement('li');
+            const timestamp = new Date(entry.timestamp).toLocaleTimeString();
+            logItem.innerHTML = `<strong>[${timestamp}]</strong> ${entry.message}`;
+            activityLogEl.appendChild(logItem);
+        });
     }
 
     async function handleTransactionSubmit(event) {
@@ -113,6 +134,11 @@ document.addEventListener('DOMContentLoaded', () => {
     transactionForm.addEventListener('submit', handleTransactionSubmit);
     reloadForm.addEventListener('submit', handleReloadSubmit);
 
-    // Initial status fetch
+    // Initial status and log fetch
     fetchStatus();
+    fetchActivityLog();
+
+    // Set up polling for real-time updates
+    setInterval(fetchStatus, 5000);
+    setInterval(fetchActivityLog, 5000); // Refresh activity log every 5 seconds
 });

@@ -1,7 +1,7 @@
 
 const express = require('express');
 const path = require('path');
-const { handleTransactionRequest, getAgentState, reloadBudget, updateCategories } = require('./agent');
+const { handleTransactionRequest, getAgentState, reloadBudget, updateCategories, getAgentActivityLog } = require('./agent');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -31,6 +31,11 @@ app.post('/transaction', async (req, res) => {
 app.get('/status', (req, res) => {
     const state = getAgentState();
     res.status(200).json(state);
+});
+
+app.get('/activity', (req, res) => {
+    const log = getAgentActivityLog();
+    res.status(200).json(log);
 });
 
 app.post('/reload', (req, res) => {

@@ -1,6 +1,8 @@
 
 require('dotenv').config();
-const checkoutNodeJssdk = require('@paypal/checkout-server-sdk');
+const payoutsNodeJssdk = require('@paypal/payouts-sdk');
+
+// --- PayPal SDK Setup ---
 
 /**
  * Sets up and returns the PayPal environment based on credentials.
@@ -12,67 +14,91 @@ function environment() {
     if (!clientId || !clientSecret) {
         throw new Error("FATAL: Missing PAYPAL_CLIENT_ID or PAYPAL_CLIENT_SECRET in .env file.");
     }
-
-    return new checkoutNodeJssdk.core.SandboxEnvironment(clientId, clientSecret);
+    // Using SandboxEnvironment for testing
+    return new payoutsNodeJssdk.core.SandboxEnvironment(clientId, clientSecret);
 }
 
 /**
  * Returns a PayPal HTTP client instance.
  */
 function client() {
-    return new checkoutNodeJssdk.core.PayPalHttpClient(environment());
+    return new payoutsNodeJssdk.core.PayPalHttpClient(environment());
 }
 
+// --- Payouts API Implementation ---
+
 /**
- * Creates a new order in the PayPal Sandbox.
- * @param {number} amount - The amount for the order.
+ * Creates and sends a single payout to a recipient.
+ * @param {number} amount - The amount to send.
+ * @param {string} recipientEmail - The recipient's PayPal email address.
  * @param {string} currency - The currency code (e.g., 'USD').
- * @returns {Promise<object|null>} The created order object or null on failure.
+ * @returns {Promise<{success: boolean, payoutId?: string, message: string}>} Result of the payout operation.
  */
-async function createOrder(amount, currency = 'USD') {
-    const request = new checkoutNodeJssdk.orders.OrdersCreateRequest();
-    request.prefer("return=representation");
-    request.requestBody({
-        intent: 'CAPTURE',
-        purchase_units: [{
-            amount: {
-                currency_code: currency,
-                value: amount.toFixed(2)
+async function createPayout(amount, recipientEmail, currency = 'USD') {
+    const senderBatchId = `payout_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    const requestBody = {
+        sender_batch_header: {
+            sender_batch_id: senderBatchId,
+            email_subject: "You have a new payout!",
+            email_message: "You have received a payout for providing a fun fact."
+        },
+        items: [
+            {
+                recipient_type: "EMAIL",
+                amount: {
+                    value: amount.toFixed(2),
+                    currency: currency
+                },
+                receiver: recipientEmail,
+                note: "Thanks for the fun fact!",
+                sender_item_id: `item_${Date.now()}`
             }
-        }]
-    });
+        ]
+    };
+    const request = new payoutsNodeJssdk.payouts.PayoutsPostRequest();
+    request.requestBody(requestBody);
 
     try {
-        console.log(`Attempting to create a real PayPal order for $${amount.toFixed(2)}...`);
-        const order = await client().execute(request);
-        console.log(`Successfully created order with ID: ${order.result.id}`);
-        return order.result;
+        console.log(`Attempting to send a $${amount.toFixed(2)} payout to ${recipientEmail}...`);
+        const response = await client().execute(request);
+        const payoutBatchId = response.result.batch_header.payout_batch_id;
+        console.log(`Successfully created payout batch with ID: ${payoutBatchId}`);
+        return {
+            success: true,
+            payoutId: payoutBatchId,
+            message: `Payout batch ${payoutBatchId} created successfully.`
+        };
     } catch (err) {
-        console.error("Failed to create PayPal order:", err.message);
-        return null;
+        const errorMessage = err.response ? JSON.stringify(err.response.data) : err.message;
+        console.error("Failed to create PayPal payout:", errorMessage);
+        return {
+            success: false,
+            message: `Failed to create payout. Details: ${errorMessage}`
+        };
     }
 }
 
 /**
- * Verifies an order by fetching its details from the PayPal API.
- * @param {string} orderId - The ID of the order to verify.
- * @returns {Promise<object|null>} The order details or null on failure.
+ * Verifies the status of a PayPal payout batch.
+ * @param {string} payoutBatchId The ID of the payout batch to verify.
+ * @returns {Promise<object|null>} The payout batch details if verification is successful, otherwise null.
  */
-async function verifyOrder(orderId) {
-    const request = new checkoutNodeJssdk.orders.OrdersGetRequest(orderId);
-
+async function verifyPayout(payoutBatchId) {
     try {
-        console.log(`Verifying order with ID: ${orderId}...`);
-        const order = await client().execute(request);
-        console.log(`Successfully verified order. Status: ${order.result.status}`);
-        return order.result;
+        const request = new payoutsNodeJssdk.payouts.PayoutsGetRequest(payoutBatchId);
+        console.log(`Verifying payout batch with ID: ${payoutBatchId}`);
+        const response = await client().execute(request);
+        console.log("Payout verification successful.");
+        return response.result;
     } catch (err) {
-        console.error(`Failed to verify PayPal order ${orderId}:`, err.message);
+        const errorMessage = err.response ? JSON.stringify(err.response.data) : err.message;
+        console.error("Failed to verify PayPal payout:", errorMessage);
         return null;
     }
 }
+
 
 module.exports = {
-    createOrder,
-    verifyOrder,
+    createPayout,
+    verifyPayout, // Export the new function
 };

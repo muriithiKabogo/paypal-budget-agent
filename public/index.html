@@ -9,29 +9,39 @@
 <body>
     <div class="container">
         <h1>PayPal Budget Agent</h1>
-        <div id="status-container">
-            <h2>Current Status</h2>
-            <p><strong>Total Budget:</strong> <span id="total-budget"></span></p>
-            <p><strong>Spent:</strong> <span id="spent-budget"></span></p>
-            <p><strong>Remaining:</strong> <span id="remaining-budget"></span></p>
-        </div>
-        <div id="transaction-container">
-            <h2>New Transaction</h2>
-            <form id="transaction-form">
-                <input type="number" id="transaction-amount" placeholder="Amount" step="0.01" required>
-                <input type="text" id="transaction-description" placeholder="Description (e.g., 'Coffee with Jane')" required>
-                <button type="submit">Submit</button>
-            </form>
-        </div>
-        <div id="reload-container">
-            <h2>Reload Budget</h2>
-            <form id="reload-form">
-                <input type="number" id="reload-amount" placeholder="New Budget Amount" step="0.01" required>
-                <button type="submit">Reload</button>
-            </form>
+        <div class="main-content">
+            <div class="left-column">
+                <div id="status-container">
+                    <h2>Current Status</h2>
+                    <p><strong>Total Budget:</strong> <span id="total-budget"></span></p>
+                    <p><strong>Spent:</strong> <span id="spent-budget"></span></p>
+                    <p><strong>Remaining:</strong> <span id="remaining-budget"></span></p>
+                </div>
+                <div id="transaction-container">
+                    <h2>New Manual Transaction</h2>
+                    <form id="transaction-form">
+                        <input type="number" id="transaction-amount" placeholder="Amount" step="0.01" required>
+                        <input type="text" id="transaction-description" placeholder="Description (e.g., 'Coffee with Jane')" required>
+                        <button type="submit">Submit</button>
+                    </form>
+                </div>
+                <div id="reload-container">
+                    <h2>Reload Budget</h2>
+                    <form id="reload-form">
+                        <input type="number" id="reload-amount" placeholder="New Budget Amount" step="0.01" required>
+                        <button type="submit">Reload</button>
+                    </form>
+                </div>
+            </div>
+            <div class="right-column">
+                <div id="activity-log-container">
+                    <h2>Agent-to-Agent Activity Log</h2>
+                    <ul id="activity-log"></ul>
+                </div>
+            </div>
         </div>
         <div id="log-container">
-            <h2>Transaction Log</h2>
+            <h2>Manual Transaction Log</h2>
             <ul id="transaction-log"></ul>
         </div>
     </div>
