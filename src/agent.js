@@ -69,6 +69,12 @@ function loadState() {
 
 // --- Agent Configuration ---
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+// DO NOT CHANGE THIS MODEL NAME OR THE v1beta PATH. gemini-pro, gemini-1.5-flash,
+// gemini-1.5-flash-latest, gemini-1.5-pro-latest, gemini-1.0-pro-latest (all on v1beta or v1)
+// are all deprecated and 404 on this API key. gemini-3.1-pro-preview on v1beta is the one
+// confirmed working by direct curl testing against the live API, repeatedly. If you think
+// you need to change this, verify the exact new URL with a real curl request first - do not
+// guess, and do not "fix" this line again without that verification.
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent?key=${GEMINI_API_KEY}`;
 const VENDOR_URL = 'http://localhost:4000/fact';
 const VENDOR_RECIPIENT_EMAIL = 'sb-92u6j30533513@business.example.com';
@@ -128,8 +134,14 @@ async function handleTransactionRequest(amount, description) {
 async function autonomousPurchase() {
     const log = (message) => {
         const timestamp = new Date().toISOString();
-        console.log(`[Autonomous Agent] ${timestamp}: ${message}`);
-        agentActivityLog.unshift({ timestamp, message });
+        const fullMessage = `[Autonomous Agent] ${timestamp}: ${message}`;
+        console.log(fullMessage);
+        // Prepend to activity log so newest is first
+        agentActivityLog.unshift({ timestamp, message: fullMessage });
+        // Keep the log from growing indefinitely in memory
+        if (agentActivityLog.length > 100) {
+            agentActivityLog.pop();
+        }
     };
     log("Waking up to see if I need a new fun fact.");
     try {
@@ -152,7 +164,15 @@ async function autonomousPurchase() {
         }
         log(`Payout successful! Payout Batch ID: ${payoutResult.payoutId}. Fetching the fact...`);
         currentSpending += price;
-        transactionHistory.push({ amount: price, description, date: new Date().toISOString(), category: modelDecision.category, payoutId: payoutResult.payoutId });
+        transactionHistory.push({ 
+            amount: price, 
+            description, 
+            date: new Date().toISOString(), 
+            status: 'approved',
+            reason: modelDecision.reason,
+            category: modelDecision.category, 
+            payoutId: payoutResult.payoutId 
+        });
         saveState(); // Save state after a successful purchase
         const purchaseRequest = await axios.get(`${VENDOR_URL}?paymentId=${payoutResult.payoutId}`);
         const { fact } = purchaseRequest.data;
@@ -176,13 +196,16 @@ function getAgentState() {
         transactionHistory: transactionHistory,
     };
 }
-function getAgentActivityLog() { return agentActivityLog; }
+function getAgentActivityLog() { 
+    return agentActivityLog; 
+}
 
 function reloadBudget(newBudget) {
     if (typeof newBudget === 'number' && newBudget > 0) {
         budgetUsd = newBudget;
         currentSpending = 0;
-        transactionHistory.length = 0;
+        transactionHistory = []; // Clear history on reload
+        agentActivityLog = []; // Clear activity log as well
         saveState(); // Save state after reloading budget
         return { success: true, message: `Budget reloaded. New budget: $${newBudget.toFixed(2)}`, state: getAgentState() };
     }

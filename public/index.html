@@ -8,46 +8,91 @@
 </head>
 <body>
     <div class="container">
-        <h1>PayPal Budget Agent</h1>
-        <div class="main-content">
-            <div class="left-column">
-                <div id="status-container">
-                    <h2>Current Status</h2>
-                    <p><strong>Total Budget:</strong> <span id="total-budget"></span></p>
-                    <p><strong>Spent:</strong> <span id="spent-budget"></span></p>
-                    <p><strong>Remaining:</strong> <span id="remaining-budget"></span></p>
+        <header class="live-status">
+            <div class="dot"></div>
+            <span>Live - Autonomous cycle every 30s</span>
+        </header>
+
+        <main>
+            <section class="overview-section">
+                <div class="card agent-flow">
+                    <h2>Agent Flow</h2>
+                    <div class="agent-flow-diagram">
+                        <div class="agent-node">
+                            <div class="circle buyer">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a2.25 2.25 0 00-2.25-2.25H15a3 3 0 11-6 0H5.25A2.25 2.25 0 003 12m18 0v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6m18 0V9M3 12V9m18 0a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 9m12 0V9" /></svg>
+                            </div>
+                            <span>Budget Agent</span>
+                        </div>
+                        <div class="flow-connector">
+                            <div class="flow-info">
+                                <span id="payout-amount">$0.00 Payout</span>
+                                <span id="payout-verified">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                    Verified on PayPal
+                                </span>
+                            </div>
+                        </div>
+                        <div class="agent-node">
+                            <div class="circle vendor">
+                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 21v-7.5A2.25 2.25 0 0115.75 11.25h.75a2.25 2.25 0 012.25 2.25v7.5m-9-7.5h1.5m-1.5 0l-3-4.5m3 4.5l3-4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            </div>
+                            <span>Vendor Agent</span>
+                        </div>
+                    </div>
                 </div>
-                <div id="transaction-container">
-                    <h2>New Manual Transaction</h2>
-                    <form id="transaction-form">
-                        <input type="number" id="transaction-amount" placeholder="Amount" step="0.01" required>
-                        <input type="text" id="transaction-description" placeholder="Description (e.g., 'Coffee with Jane')" required>
-                        <button type="submit">Submit</button>
-                    </form>
+
+                <div class="card budget-gauge">
+                    <h2>Budget</h2>
+                    <div class="budget-gauge-visual">
+                        <div id="budget-ring"></div>
+                        <div class="budget-gauge-text">
+                            <span id="budget-remaining">$0.00</span>
+                            <span id="budget-of-total">of $100.00</span>
+                        </div>
+                    </div>
                 </div>
-                <div id="reload-container">
-                    <h2>Reload Budget</h2>
-                    <form id="reload-form">
-                        <input type="number" id="reload-amount" placeholder="New Budget Amount" step="0.01" required>
-                        <button type="submit">Reload</button>
-                    </form>
+            </section>
+
+            <section class="card hero-card">
+                <h2>Latest Decision</h2>
+                <div id="latest-decision-content">
+                    <!-- JS will populate this -->
+                    <p>Waiting for first transaction...</p>
                 </div>
-                 <div id="history-container">
-                    <h2>Transaction History</h2>
-                    <ul id="transaction-history"></ul>
+            </section>
+
+            <section class="card activity-timeline">
+                <h2>Recent Activity</h2>
+                <ul id="activity-log-list">
+                    <!-- JS will populate this -->
+                    <li>No activity yet.</li>
+                </ul>
+            </section>
+
+            <details class="card manual-controls">
+                <summary>Manual Controls</summary>
+                <div class="manual-controls-content">
+                    <div id="manual-transaction">
+                        <h3>Manual Transaction</h3>
+                        <form id="transaction-form">
+                            <input type="text" id="item" placeholder="Item" required>
+                            <input type="number" step="0.01" id="amount" placeholder="Amount" required>
+                            <button type="submit">Submit Transaction</button>
+                        </form>
+                        <div id="transaction-status"></div>
+                    </div>
+                    <div id="budget-reload">
+                        <h3>Reload Budget</h3>
+                        <form id="budget-form">
+                            <input type="number" step="0.01" id="new-budget" placeholder="New Budget" required>
+                            <button type="submit">Reload Budget</button>
+                        </form>
+                        <div id="budget-status"></div>
+                    </div>
                 </div>
-            </div>
-            <div class="right-column">
-                <div id="activity-log-container">
-                    <h2>Agent-to-Agent Activity Log</h2>
-                    <ul id="activity-log"></ul>
-                </div>
-            </div>
-        </div>
-        <div id="log-container">
-            <h2>Manual Transaction Log</h2>
-            <ul id="transaction-log"></ul>
-        </div>
+            </details>
+        </main>
     </div>
     <script src="app.js"></script>
 </body>

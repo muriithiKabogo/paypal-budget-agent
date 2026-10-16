@@ -1,68 +1,302 @@
+/* public/style.css */
+
+/* --- Font Imports --- */
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap');
+
+/* --- CSS Variables --- */
+:root {
+  --background-color: #F7F8FA;
+  --card-background: #FFFFFF;
+  --border-color: #E5E7EB;
+  --text-primary: #1F2937;
+  --text-secondary: #6B7280;
+  --accent-blue: #2563EB;
+  --accent-green: #16A34A;
+  --accent-red: #DC2626;
+  --font-heading: 'Space Grotesk', sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", "system-ui", sans-serif;
+}
+
+/* --- General Styles --- */
 body {
-    font-family: sans-serif;
-    margin: 0;
-    padding: 20px;
-    background-color: #f4f4f4;
+  font-family: var(--font-body);
+  background-color: var(--background-color);
+  color: var(--text-primary);
+  margin: 0;
+  padding: 2rem;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .container {
-    max-width: 600px;
-    margin: auto;
-    background: #fff;
-    padding: 20px;
-    border-radius: 5px;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  max-width: 800px;
+  margin: 0 auto;
+  display: grid;
+  gap: 2rem;
 }
 
-h1, h2 {
+h1, h2, h3 {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  margin: 0;
+}
+
+p { margin: 0; }
+
+/* --- Live Status Pill --- */
+.live-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  padding-left: 4px; /* Align with cards */
+}
+
+.live-status .dot {
+  width: 10px;
+  height: 10px;
+  background-color: var(--accent-green);
+  border-radius: 50%;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(22, 163, 74, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(22, 163, 74, 0); }
+}
+
+/* --- Card Styles --- */
+.card {
+  background-color: var(--card-background);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 1.5rem;
+}
+
+/* --- Overview Section (Diagram + Gauge) --- */
+.overview-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+.agent-flow h2, .budget-gauge h2 {
+    font-size: 1.25rem;
+    margin-bottom: 1rem;
+}
+
+.agent-flow-diagram {
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    text-align: center;
+    padding: 1rem 0;
+}
+.agent-node { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; }
+.agent-node .circle { width: 60px; height: 60px; border-radius: 50%; display: grid; place-items: center; }
+.agent-node .buyer { background-color: var(--accent-blue); }
+.agent-node .vendor { background-color: var(--text-secondary); }
+.agent-node svg { width: 32px; height: 32px; color: white; }
+.agent-node span { font-weight: 500; font-family: var(--font-heading); }
+.flow-connector { flex-grow: 1; height: 2px; background-color: var(--border-color); position: relative; }
+.flow-info { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--card-background); padding: 0.25rem 0.5rem; }
+#payout-amount { font-weight: 700; }
+#payout-verified { font-size: 0.8rem; color: var(--accent-green); display: flex; align-items: center; gap: 0.25rem; }
+#payout-verified svg { width: 14px; height: 14px; }
+
+.budget-gauge-visual {
+    position: relative;
+    width: 150px;
+    height: 150px;
+    margin: 0 auto;
+}
+#budget-ring {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: conic-gradient(var(--accent-blue) 0deg, var(--border-color) 0deg);
+}
+.budget-gauge-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
     text-align: center;
 }
-
-#status-container, #transaction-container, #log-container {
-    margin-bottom: 20px;
+#budget-remaining {
+    font-size: 2rem;
+    font-weight: 700;
+    font-family: var(--font-heading);
+}
+#budget-of-total {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
 }
 
-#transaction-form {
+
+/* --- Latest Decision Hero Card --- */
+.hero-card {
+    padding: 2rem;
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+.hero-card h2 {
+    font-size: 1.25rem;
+}
+#latest-decision-content {
+    display: grid;
+    gap: 1.5rem;
+}
+.hero-status {
+    display: flex;
     align-items: center;
+    gap: 1rem;
+}
+.hero-status-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+}
+.hero-status-icon.approved { background-color: #E7F6EC; color: var(--accent-green); }
+.hero-status-icon.denied { background-color: #FDECEC; color: var(--accent-red); }
+.hero-status-icon svg { width: 28px; height: 28px; }
+.hero-status-text {
+    font-size: 2.5rem;
+    font-weight: 700;
+    font-family: var(--font-heading);
+}
+.hero-status-text.approved { color: var(--accent-green); }
+.hero-status-text.denied { color: var(--accent-red); }
+
+#decision-reasoning {
+    background-color: var(--background-color);
+    border-left: 4px solid var(--border-color);
+    padding: 1rem;
+    border-radius: 0 8px 8px 0;
+    font-style: italic;
+    color: var(--text-secondary);
+}
+.decision-details {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+.detail-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: var(--font-heading);
+}
+.detail-item svg {
+    width: 16px;
+    height: 16px;
+}
+#decision-paypal-id {
+    font-weight: 500;
+    color: var(--text-primary);
 }
 
-#transaction-form input {
-    width: 60%;
-    padding: 10px;
-    border: 1px solid #ddd;
-    border-radius: 3px;
-}
 
-#transaction-form button {
-    padding: 10px 20px;
-    border: none;
-    background-color: #0070ba;
-    color: white;
-    border-radius: 3px;
-    cursor: pointer;
-    margin-left: 10px;
-}
-
-#transaction-form button:hover {
-    background-color: #005ea6;
-}
-
-#transaction-log {
+/* --- Recent Activity Timeline --- */
+#activity-log-list {
     list-style: none;
     padding: 0;
+    margin: 0;
+    position: relative;
+    border-left: 2px solid var(--border-color);
+    margin-left: 10px; /* Space for the dot */
+}
+.activity-item {
+    position: relative;
+    padding: 0.75rem 0 0.75rem 2rem;
+}
+.activity-item::before {
+    content: '';
+    position: absolute;
+    left: -11px; /* (dot width / 2) + (border width / 2) */
+    top: 50%;
+    transform: translateY(-50%);
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background-color: var(--card-background);
+    border: 3px solid var(--border-color);
+}
+.activity-item.approved::before { border-color: var(--accent-green); }
+.activity-item.denied::before { border-color: var(--accent-red); }
+
+.activity-item-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+#activity-log-list p {
+    flex-grow: 1;
+}
+#activity-log-list .timestamp {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    padding-left: 1rem;
 }
 
-#transaction-log li {
-    padding: 10px;
-    border-bottom: 1px solid #eee;
+/* --- Manual Controls --- */
+.manual-controls summary {
+  padding: 1.25rem 1.5rem;
+  font-family: var(--font-heading);
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
-
-#transaction-log li.success {
-    color: green;
+.manual-controls summary::after {
+  content: 'Show';
 }
-
-#transaction-log li.error {
-    color: red;
+.manual-controls[open] summary::after {
+  content: 'Hide';
+}
+.manual-controls-content {
+  padding: 0 1.5rem 1.5rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  border-top: 1px solid var(--border-color);
+}
+#manual-transaction h3, #budget-reload h3 {
+    margin-top: 1.25rem;
+    margin-bottom: 1rem;
+    font-size: 1rem;
+}
+input[type="text"], input[type="number"] {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    margin-bottom: 0.5rem;
+}
+button {
+    background-color: var(--accent-blue);
+    color: white;
+    border: none;
+    padding: 0.6rem 1rem;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+button:hover {
+    background-color: #1D4ED8;
+}
+#transaction-status, #budget-status {
+    margin-top: 0.5rem;
+    font-size: 0.9rem;
 }
