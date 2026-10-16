@@ -1,26 +1,79 @@
 
 require('dotenv').config();
 const axios = require('axios');
-const { createPayout } = require('./paypal'); // Updated import
+const fs = require('fs');
+const path = require('path');
+const { createPayout } = require('./paypal');
 
-// --- Agent Configuration & State ---
-let budgetUsd = 100.00;
-let currentSpending = 0.00;
-const transactionHistory = [];
-const agentActivityLog = [];
-let allowedCategories = ['groceries', 'utilities', 'transport', 'business_expenses', 'data_services', 'digital_goods'];
+// --- Agent State Management ---
+const STATE_FILE = path.join(__dirname, 'agent_state.json');
 
+// State variables are declared with 'let' to allow them to be re-initialized from the saved state file.
+let budgetUsd;
+let currentSpending;
+let transactionHistory;
+let agentActivityLog; // Activity log will be in-memory only and not persisted.
+let allowedCategories;
+
+// Default initial state
+const initialState = {
+    budgetUsd: 100.00,
+    currentSpending: 0.00,
+    transactionHistory: [],
+    agentActivityLog: [],
+    allowedCategories: ['groceries', 'utilities', 'transport', 'business_expenses', 'data_services', 'digital_goods']
+};
+
+function saveState() {
+    try {
+        const stateToSave = {
+            budgetUsd,
+            currentSpending,
+            transactionHistory,
+            allowedCategories
+        };
+        fs.writeFileSync(STATE_FILE, JSON.stringify(stateToSave, null, 2), 'utf8');
+    } catch (error) {
+        console.error("Error saving agent state:", error);
+    }
+}
+
+function loadState() {
+    try {
+        if (fs.existsSync(STATE_FILE)) {
+            const data = fs.readFileSync(STATE_FILE, 'utf8');
+            const savedState = JSON.parse(data);
+            budgetUsd = savedState.budgetUsd !== undefined ? savedState.budgetUsd : initialState.budgetUsd;
+            currentSpending = savedState.currentSpending !== undefined ? savedState.currentSpending : initialState.currentSpending;
+            transactionHistory = savedState.transactionHistory || initialState.transactionHistory;
+            allowedCategories = savedState.allowedCategories || initialState.allowedCategories;
+            agentActivityLog = []; // Reset activity log on each start
+            console.log('Agent state successfully loaded from file.');
+        } else {
+            // If no file exists, initialize with default state
+            budgetUsd = initialState.budgetUsd;
+            currentSpending = initialState.currentSpending;
+            transactionHistory = initialState.transactionHistory;
+            agentActivityLog = initialState.agentActivityLog;
+            allowedCategories = initialState.allowedCategories;
+            saveState(); // Create the file for the first time
+            console.log('No state file found. Initialized with default state.');
+        }
+    } catch (error) {
+        console.error('Error loading agent state, initializing with defaults:', error);
+        // Initialize with defaults in case of a corrupted file
+        Object.assign(this, initialState);
+    }
+}
+
+
+// --- Agent Configuration ---
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent?key=${GEMINI_API_KEY}`;
 const VENDOR_URL = 'http://localhost:4000/fact';
-// Per instructions, use a sandbox recipient email for the vendor agent
 const VENDOR_RECIPIENT_EMAIL = 'sb-92u6j30533513@business.example.com';
 
 
-/**
- * Calls the Gemini API to get a reasoned decision on a transaction.
- * (No changes needed in this function)
- */
 async function getGeminiDecision(amount, description, state) {
     if (!GEMINI_API_KEY) {
         return { decision: 'APPROVE', reason: 'Automatic approval due to missing Gemini API key.', category: 'unknown' };
@@ -60,10 +113,6 @@ async function getGeminiDecision(amount, description, state) {
     }
 }
 
-/**
- * A simplified handler for manual transactions, which now only makes a decision
- * and does NOT process a payment.
- */
 async function handleTransactionRequest(amount, description) {
     console.log(`\n--- Manual Decision Request: $${amount.toFixed(2)} for "${description}" ---`);
     const state = getAgentState();
@@ -73,11 +122,8 @@ async function handleTransactionRequest(amount, description) {
     }
     const modelDecision = await getGeminiDecision(amount, description, state);
     console.log(`Model Decision: ${modelDecision.decision}. Reason: ${modelDecision.reason}`);
-    // This function no longer creates an order. It just returns the decision.
     return { success: modelDecision.decision === 'APPROVE', reason: modelDecision.reason, state };
 }
-
-// --- Autonomous Agent Logic ---
 
 async function autonomousPurchase() {
     const log = (message) => {
@@ -85,47 +131,32 @@ async function autonomousPurchase() {
         console.log(`[Autonomous Agent] ${timestamp}: ${message}`);
         agentActivityLog.unshift({ timestamp, message });
     };
-
     log("Waking up to see if I need a new fun fact.");
-
     try {
-        // 1. Get the price from the vendor
         const priceRequest = await axios.get(VENDOR_URL, { validateStatus: status => status === 402 });
         const { price } = priceRequest.data;
         const description = "Purchase a fun fact from the vendor agent.";
         log(`Vendor requires a payment of $${price}. Considering the purchase...`);
         const state = getAgentState();
-
-        // 2. Make a decision using Gemini
         const modelDecision = await getGeminiDecision(price, description, state);
         log(`Model Decision: ${modelDecision.decision}. Category: ${modelDecision.category}. Reason: ${modelDecision.reason}`);
-
         if (modelDecision.decision !== 'APPROVE') {
             log(`Purchase DENIED. Going back to sleep.`);
             return;
         }
-
-        // 3. Create and send the Payout
         log(`Purchase APPROVED. Attempting to send payout...`);
         const payoutResult = await createPayout(price, VENDOR_RECIPIENT_EMAIL);
-
         if (!payoutResult.success) {
             log(`Payout FAILED. Reason: ${payoutResult.message}`);
             return;
         }
-        
         log(`Payout successful! Payout Batch ID: ${payoutResult.payoutId}. Fetching the fact...`);
-        
-        // 4. Update local state and fetch the fact
         currentSpending += price;
         transactionHistory.push({ amount: price, description, date: new Date().toISOString(), category: modelDecision.category, payoutId: payoutResult.payoutId });
-
-        // 5. Complete the purchase by sending the Payout ID to the vendor
-        // Assuming the vendor API accepts `paymentId` as the query param for the Payout ID
+        saveState(); // Save state after a successful purchase
         const purchaseRequest = await axios.get(`${VENDOR_URL}?paymentId=${payoutResult.payoutId}`);
         const { fact } = purchaseRequest.data;
         log(`Successfully purchased fact: "${fact}"`);
-
     } catch (error) {
         if (error.response && error.response.status === 402) {
             // This is the expected initial state, handled above.
@@ -136,8 +167,6 @@ async function autonomousPurchase() {
     }
 }
 
-
-// --- Utility Functions ---
 function getAgentState() {
     return {
         budget: budgetUsd,
@@ -148,25 +177,30 @@ function getAgentState() {
     };
 }
 function getAgentActivityLog() { return agentActivityLog; }
+
 function reloadBudget(newBudget) {
     if (typeof newBudget === 'number' && newBudget > 0) {
         budgetUsd = newBudget;
         currentSpending = 0;
         transactionHistory.length = 0;
+        saveState(); // Save state after reloading budget
         return { success: true, message: `Budget reloaded. New budget: $${newBudget.toFixed(2)}`, state: getAgentState() };
     }
     return { success: false, message: 'Invalid budget amount.', state: getAgentState() };
 }
+
 function updateCategories(newCategories) {
     if (Array.isArray(newCategories) && newCategories.every(c => typeof c === 'string')) {
         allowedCategories = newCategories.map(c => c.toLowerCase().trim());
+        saveState(); // Save state after updating categories
         return { success: true, message: 'Allowed categories updated.', state: getAgentState() };
     }
     return { success: false, message: 'Invalid categories format. Please provide an array of strings.', state: getAgentState() };
 }
 
-// --- Start Autonomous Loop ---
-setInterval(autonomousPurchase, 30000); // Run every 30 seconds
+// --- Initialization ---
+loadState(); // Load the state when the module is first required
+setInterval(autonomousPurchase, 30000);
 
 module.exports = {
     handleTransactionRequest,

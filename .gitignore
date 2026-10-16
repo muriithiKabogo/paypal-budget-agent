@@ -3,3 +3,4 @@ node_modules/
 .automaton/
 *.log
 .npm/
+src/agent_state.json

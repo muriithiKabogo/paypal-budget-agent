@@ -9,12 +9,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const reloadAmountEl = document.getElementById('reload-amount');
     const transactionLogEl = document.getElementById('transaction-log');
     const activityLogEl = document.getElementById('activity-log');
+    const transactionHistoryEl = document.getElementById('transaction-history');
 
     async function fetchStatus() {
         try {
             const response = await fetch('/status');
             const data = await response.json();
             updateStatusUI(data);
+            updateTransactionHistoryUI(data.transactionHistory);
         } catch (error) {
             console.error('Error fetching status:', error);
         }
@@ -43,6 +45,20 @@ document.addEventListener('DOMContentLoaded', () => {
             const timestamp = new Date(entry.timestamp).toLocaleTimeString();
             logItem.innerHTML = `<strong>[${timestamp}]</strong> ${entry.message}`;
             activityLogEl.appendChild(logItem);
+        });
+    }
+
+    function updateTransactionHistoryUI(history) {
+        transactionHistoryEl.innerHTML = ''; // Clear the list
+        history.slice().reverse().forEach(tx => {
+            const listItem = document.createElement('li');
+            const date = new Date(tx.date).toLocaleString();
+            listItem.innerHTML = `
+                <strong>${tx.description}</strong> - $${tx.amount.toFixed(2)}
+                <br>
+                <small>${date} - Category: ${tx.category || 'N/A'}</small>
+            `;
+            transactionHistoryEl.appendChild(listItem);
         });
     }
 
@@ -101,6 +117,8 @@ document.addEventListener('DOMContentLoaded', () => {
             logTransaction(result); // Reload doesn't need amount/desc
             if (result.state) {
                 updateStatusUI(result.state);
+                // After a budget reload, the history is cleared, so update the UI
+                updateTransactionHistoryUI(result.state.transactionHistory);
             }
             reloadAmountEl.value = '';
         } catch (error) {
