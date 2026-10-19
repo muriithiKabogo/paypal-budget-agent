@@ -1,6 +1,5 @@
 
-require('dotenv').config();
-const axios = require('axios');
+require('dotenv').config({ quiet: true });
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const LIST_MODELS_URL = `https://generativelanguage.googleapis.com/v1beta/models?key=${GEMINI_API_KEY}`;
@@ -14,8 +13,10 @@ async function listModels() {
   console.log("Fetching available Gemini models...");
 
   try {
-    const response = await axios.get(LIST_MODELS_URL);
-    const models = response.data.models;
+    const response = await fetch(LIST_MODELS_URL);
+    const data = await response.json();
+    if (!response.ok) throw Object.assign(new Error(`HTTP ${response.status}`), { response: { data } });
+    const models = data.models;
 
     if (models && models.length > 0) {
       console.log("Available Models:");

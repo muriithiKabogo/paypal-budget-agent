@@ -1,71 +1,49 @@
-
 const express = require('express');
 const path = require('path');
-const { handleTransactionRequest, getAgentState, reloadBudget, updateCategories, getAgentActivityLog } = require('./agent');
+const config = require('./config');
+const gemini = require('./gemini');
+const paypal = require('./paypal');
+const { router: api } = require('./api');
+const { vendorRouter } = require('./vendors');
+const { sitesRouter } = require('./sites');
+
+const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 
 const app = express();
-const port = process.env.PORT || 3000;
+app.set('trust proxy', 1);
+app.disable('x-powered-by');
+// Voice clips (up to 30 s of 16 kHz WAV, base64) need more room than every other request.
+app.use('/api/transcribe', express.json({ limit: '1.5mb' }));
+app.use(express.json({ limit: '20kb' }));
 
-app.use(express.static(path.join(__dirname, '..', 'public')));
-app.use(express.json());
+app.use('/vendors', vendorRouter);
+app.use('/api', api);
+app.use('/sites', sitesRouter);
+app.use(express.static(PUBLIC_DIR));
 
-app.post('/transaction', async (req, res) => {
-    const { amount, description } = req.body;
+// The web app routes on the client, so any other page load gets the app shell.
+app.use((req, res, next) => {
+    if (req.method !== 'GET' || /^\/(api|vendors|sites)\//.test(req.path)) return next();
+    return res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
+});
 
-    if (typeof amount !== 'number' || amount <= 0) {
-        return res.status(400).json({ error: 'Invalid "amount" in request body.' });
+app.use((err, req, res, next) => {
+    if (res.headersSent) return next(err);
+    if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'invalid_json', message: 'The request body is not valid JSON.' });
+    if (err.type === 'entity.too.large') {
+        const message = req.path === '/api/transcribe' ? 'That recording is too long. Keep it under 30 seconds.' : 'That request is too large.';
+        return res.status(413).json({ error: 'too_large', message });
     }
-    if (typeof description !== 'string' || description.trim() === '') {
-        return res.status(400).json({ error: 'A non-empty "description" is required.' });
-    }
-
-    const result = await handleTransactionRequest(amount, description);
-
-    if (result.success) {
-        res.status(200).json(result);
-    } else {
-        res.status(400).json(result);
-    }
+    console.error(err);
+    return res.status(500).json({ error: 'server_error', message: 'Something went wrong on the server.' });
 });
 
-app.get('/status', (req, res) => {
-    const state = getAgentState();
-    res.status(200).json(state);
-});
+if (require.main === module) {
+    app.listen(config.port, () => {
+        console.log(`Allowance is running at http://localhost:${config.port}`);
+        if (!gemini.isConfigured()) console.warn('GEMINI_API_KEY is not set: planning fails and every purchase is denied (fail-safe).');
+        if (!paypal.isConfigured()) console.warn('PayPal sandbox credentials are not set: approved purchases fail at the payment step.');
+    });
+}
 
-app.get('/activity', (req, res) => {
-    const log = getAgentActivityLog();
-    res.status(200).json(log);
-});
-
-app.post('/reload', (req, res) => {
-    const { newBudget } = req.body;
-    if (typeof newBudget !== 'number' || newBudget <= 0) {
-        return res.status(400).json({ error: 'Invalid "newBudget" in request body.' });
-    }
-    const result = reloadBudget(newBudget);
-    res.status(200).json(result);
-});
-
-app.get('/categories', (req, res) => {
-    const state = getAgentState();
-    res.status(200).json({ allowedCategories: state.allowedCategories });
-});
-
-app.put('/categories', (req, res) => {
-    const { categories } = req.body;
-    if (!Array.isArray(categories)) {
-        return res.status(400).json({ error: 'Request body must be an object with a "categories" array.' });
-    }
-    const result = updateCategories(categories);
-    if (result.success) {
-        res.status(200).json(result);
-    } else {
-        res.status(400).json(result);
-    }
-});
-
-app.listen(port, () => {
-    console.log(`PayPal Budget Agent server listening at http://localhost:${port}`);
-    console.log(`UI available at http://localhost:${port}`);
-});
+module.exports = { app };

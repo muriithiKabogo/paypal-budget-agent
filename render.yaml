@@ -1,0 +1,25 @@
+# One-click deploy on Render: New > Blueprint, then point it at this repo.
+# Fill in the secret values in the Render dashboard when it asks.
+services:
+  - type: web
+    name: allowance
+    runtime: node
+    plan: free
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /api/config
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: VENDOR_PAYPAL_EMAIL
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_THINKING_LEVEL
+        value: low
+      - key: DEMO_VIDEO_URL
+        sync: false

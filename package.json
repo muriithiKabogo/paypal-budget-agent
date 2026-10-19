@@ -1,28 +1,38 @@
 {
   "name": "paypal-budget-agent",
-  "version": "1.0.0",
-  "description": "",
-  "main": "paypal_budget.js",
+  "version": "2.0.0",
+  "description": "Allowance: an AI research agent that buys data from other agents with PayPal sandbox payouts, inside spending rules you set and Gemini checks.",
+  "main": "src/server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "vendors": "node src/vendor.js",
+    "test": "node --test",
+    "list-models": "node list_models.js"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/muriithiKabogo/paypal-budget-agent.git"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "paypal",
+    "gemini",
+    "ai-agent",
+    "agentic-commerce",
+    "http-402"
+  ],
+  "author": "muriithiKabogo",
+  "license": "MIT",
   "type": "commonjs",
   "bugs": {
     "url": "https://github.com/muriithiKabogo/paypal-budget-agent/issues"
   },
   "homepage": "https://github.com/muriithiKabogo/paypal-budget-agent#readme",
   "dependencies": {
-    "@paypal/checkout-server-sdk": "^1.0.3",
-    "@paypal/payouts-sdk": "^1.1.1",
-    "axios": "^1.20.0",
-    "cors": "^2.8.6",
+    "dotenv": "^18.0.7",
     "express": "^5.3.0"
   }
 }
