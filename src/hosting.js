@@ -154,10 +154,17 @@ async function deploy({ slug, html }, progress = () => {}) {
 }
 
 // Takes down demo sites older than SITES_KEEP_DAYS: the Render site and its folder in the repo.
+// A folder with a KEEP file in it is pinned (the landing page replays that mission) and stays up.
 async function cleanup() {
     if (!isConfigured()) return [];
     const cutoff = Date.now() - config.sitesKeepDays * DAY_MS;
-    const old = (await render.listSites(repoUrl())).filter((s) => Date.parse(s.createdAt) < cutoff && /^sites\/[a-z0-9-]+$/.test(s.rootDir));
+    let old = (await render.listSites(repoUrl())).filter((s) => Date.parse(s.createdAt) < cutoff && /^sites\/[a-z0-9-]+$/.test(s.rootDir));
+    if (!old.length) return [];
+    const pinned = await serially(async () => {
+        await checkout();
+        return (slug) => fs.existsSync(path.join(CHECKOUT, 'sites', slug, 'KEEP'));
+    });
+    old = old.filter((s) => !pinned(s.rootDir.slice('sites/'.length)));
     for (const site of old) await render.deleteService(site.id);
     const slugs = old.map((s) => s.rootDir.slice('sites/'.length));
     if (slugs.length) await changeRepo(`Remove ${slugs.length} expired site${slugs.length === 1 ? '' : 's'}`, removeFolders(slugs));

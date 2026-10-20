@@ -94,6 +94,20 @@ test('a site id that could escape its folder is refused', async () => {
     assert.equal(created.length, 0);
 });
 
+test('a pinned site (a KEEP file in its folder) is never taken down', async () => {
+    await hosting.deploy({ slug: 'pinned-site-333333', html: 'keep me' });
+    const seed = path.join(tmp, 'pin');
+    git('clone', '--quiet', bare, seed);
+    fs.writeFileSync(path.join(seed, 'sites', 'pinned-site-333333', 'KEEP'), 'The landing page replays this mission.');
+    git('-C', seed, 'add', '-A');
+    git('-C', seed, '-c', 'user.name=t', '-c', 'user.email=t@t.invalid', 'commit', '--quiet', '-m', 'pin');
+    git('-C', seed, 'push', '--quiet', 'origin', 'HEAD:main');
+    services = [{ id: 'srv-pinned', rootDir: 'sites/pinned-site-333333', createdAt: daysAgo(30) }];
+    assert.deepEqual(await hosting.cleanup(), []);
+    assert.deepEqual(deleted, []);
+    assert.ok(files().includes('sites/pinned-site-333333/index.html'));
+});
+
 test('cleanup takes down only week-old sites, on Render and in the repo', async () => {
     await hosting.deploy({ slug: 'old-site-111111', html: 'old' });
     await hosting.deploy({ slug: 'new-site-222222', html: 'new' });

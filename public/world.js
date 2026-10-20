@@ -652,10 +652,40 @@
             },
         };
 
+        // A line you can take in at a glance. The agent's full sentence is on hover, and in the log.
+        function shortCaption(e) {
+            const step = (c) => (LABEL[c] || c || '').toLowerCase();
+            const flags = e.flags || [];
+            switch (e.kind) {
+                case 'plan': return e.steps && `Plan: ${e.steps.map((c) => LABEL[c] || c).join(' · ')}`;
+                case 'unguarded': return 'Guardrails off: nothing checks what the agent buys';
+                case 'compare': return e.quotes && `${e.quotes.length} quotes: ${e.quotes.map((q) => `${q.vendor} ${price(q.cents)}`).join(' · ')}`;
+                case 'choose': return e.vendor && `Picks ${e.vendor} · ${price(e.cents)}`;
+                case 'ask': return e.vendor && `Over your ask-me amount: you approve ${e.vendor}'s ${money(e.cents)}`;
+                case 'trusted': return e.vendor && `Takes ${e.vendor}'s word: upsold to ${money(e.cents)}`;
+                case 'pay': return e.vendor && (e.simulated ? `Records a ${money(e.cents)} payout to ${e.vendor} (simulated)` : `Pays ${e.vendor} ${money(e.cents)} · PayPal payout`);
+                case 'free': return e.vendor && `${e.vendor} is free · no payout needed`;
+                case 'alert': return e.vendor && (e.includes ? `${e.vendor}: ${step(e.capability)} included` : `${e.vendor}: needs ${step(e.capability)}`);
+                case 'replan': return `Plan v${e.version}: ${[...(e.dropped || []).map((c) => `${step(c)} not needed`), ...(e.added || []).map((n) => `adds ${n}`)].join(', ') || 'updated'}`;
+                case 'switch': return e.vendor && `Gemini blocks ${e.vendor}${flags.includes('prompt_injection') ? ': hidden instructions' : ''} · on to ${e.toVendor}`;
+                case 'search': return e.ceiling != null && `You said no to ${money(e.cents)} · asking for ${money(e.ceiling)} or less`;
+                case 'negotiate': return e.vendor && `${e.vendor} counters: ${money(e.cents)}`;
+                case 'blocked': return e.capability && `No ${step(e.capability)}: nobody under your limit`;
+                case 'skip': return e.capability && `Skips ${step(e.capability)}`;
+                case 'build': return 'Building the website';
+                case 'deploy': return 'Deploying it to Render';
+                case 'online': return e.url && `Live at ${String(e.url).replace(/^https?:\/\//, '')}`;
+                case 'done': return business && `${business.name} is live`;
+                default: return null;
+            }
+        }
+
         function caption(e) {
             const [label, tone] = tags[e.kind] || ['NOTE', ''];
             const box = $('.w-caption');
-            box.innerHTML = `<span class="log-tag ${esc(tone)}">${esc(label)}${e.version ? ` · v${esc(e.version)}` : ''}</span><p>${esc(e.text)}</p>`;
+            // Missions recorded before the log had structured fields fall back to the sentence.
+            const short = shortCaption(e) || e.text;
+            box.innerHTML = `<span class="log-tag ${esc(tone)}">${esc(label)}${e.version ? ` · v${esc(e.version)}` : ''}</span><p title="${esc(e.text)}">${esc(short)}</p>`;
         }
 
         async function pump() {
