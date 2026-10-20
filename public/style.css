@@ -452,6 +452,32 @@ legend { padding: 0 8px; margin-left: -8px; font-size: 20px; font-weight: 600; }
 @keyframes sweep { 0% { transform: translateX(-100%); } 100% { transform: translateX(260%); } }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+/* ---------- Landing: show first, details on demand ---------- */
+.hero-short { display: flex; flex-direction: column; gap: 20px; padding-top: 48px; padding-bottom: 32px; }
+.hero-short .h-hero { max-width: 920px; font-size: clamp(40px, 5vw, 64px); }
+.hero-short .hero-lede { max-width: 760px; }
+.section-xs { padding-top: 40px; padding-bottom: 8px; }
+.section-xs:last-child { padding-bottom: 64px; }
+.replay-section { padding-bottom: 24px; }
+.steps, .attack-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
+.step { display: flex; flex-direction: column; gap: 6px; padding: 18px 20px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.step.you { border: 1px dashed var(--dash); background: transparent; }
+.step-n { font-size: 13px; color: var(--lime); }
+.step-title { font-size: 17px; font-weight: 600; }
+.step-text { font-size: 15px; color: var(--muted); }
+.attack-mini { width: 100%; display: flex; flex-direction: column; gap: 6px; padding: 16px 18px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--bg-band); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.attack-mini:hover { border-color: var(--orange); }
+.attack-mini:focus-visible { outline: 2px solid var(--lime); outline-offset: 2px; }
+.attack-mini .attack-top { font-size: 16px; }
+.details-card { display: block; padding: 0; }
+.details-card > summary { display: flex; align-items: center; gap: 10px; padding: 18px 22px; font-weight: 600; cursor: pointer; list-style: none; }
+.details-card > summary::-webkit-details-marker { display: none; }
+.details-card > summary::before { content: '+'; width: 14px; font-family: var(--mono); color: var(--lime); }
+.details-card[open] > summary::before { content: '\2212'; }
+.details-card > summary:focus-visible { outline: 2px solid var(--lime); outline-offset: 2px; border-radius: 12px; }
+.details-card > :not(summary) { padding: 0 22px 22px; }
+.details-card .summary-note { margin-left: auto; font-weight: 400; font-size: 14px; color: var(--dim); }
+
 /* ---------- The agent's world (world.js) ---------- */
 .world { border: 1px solid var(--line); border-radius: 16px; overflow: hidden; background: #07090C; }
 .w-stage { position: relative; }

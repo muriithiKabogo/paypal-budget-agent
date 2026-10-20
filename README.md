@@ -38,7 +38,7 @@ On the console, **Launch a website** (or say "Launch a website for…" into the 
 6. **Asks you** before paying Pixelfern $12 for a logo, because it's over your $10 ask-me amount.
 7. **Goes live on Render.** Gemini writes the site, which is pushed to its own folder in [allowance-sites](https://github.com/muriithiKabogo/allowance-sites) and deployed as its own Render static site, so the bakery gets a real `onrender.com` address, with a welcome email ready to send. The domain stays simulated.
 
-**Watch it happen.** The mission screen draws the run as a night-market street: the agent walks from shop to shop with its guard (Gemini), price tags pop up, coins fly to each vendor as PayPal payouts go out, Postwell gets a red ✕, Pixelfern haggles, and the site rises on the empty lot at the end of the street with a LIVE flag and its real Render address. Every scene comes from a real entry in the mission log, and a finished mission has a **Watch the journey** button to replay it (`public/world.js`: plain SVG and the Web Animations API, no libraries).
+**Watch it happen.** The mission screen draws the run as a night-market street: the agent walks from shop to shop with its guard (Gemini), price tags pop up, coins fly to each vendor as PayPal payouts go out, Postwell gets a red ✕, Pixelfern haggles, and the site rises on the empty lot at the end of the street with a LIVE flag and its real Render address. Every scene comes from a real entry in the mission log, and a finished mission has a **Watch the journey** button to replay it (`public/world.js`: plain SVG and the Web Animations API, no libraries). The landing page plays a real run recorded on the hosted app (`public/recorded-mission.json`) the moment it opens, so you see the whole idea before reading a word; **Run it yourself** starts the same mission in one click.
 
 That's $23 through PayPal to three vendors. Render's quote uses its published pricing; the storefront the agent talks to is simulated, and the deploy is real. Without Render set up, Render isn't offered: the agent pays Pinehost $12 instead (asking you first), Pinehost insists on HTTPS, and the SSL certificate comes from Lockstep SSL, about $38 in all.
 
@@ -84,7 +84,7 @@ When `SITES_REPO`, `SITES_DEPLOY_KEY_FILE` and `RENDER_API_KEY` are set, Render 
 2. The Render API creates a static site whose root is that folder, with the same Content-Security-Policy the local copy gets (no scripts, nothing loaded, no forms).
 3. The agent waits for Render to report the deploy live, then the results screen shows and links the `onrender.com` site.
 
-Anyone can launch a mission, so there are limits: at most 10 new Render sites a day (`SITES_PER_DAY`), each taken down with its folder after 7 days (`SITES_KEEP_DAYS`), and only sites built from that repo are ever counted or deleted. The mission form tells visitors their site will be public. If any step fails, the site is still served here at `/sites/<site-id>` and the mission ends normally.
+Anyone can launch a mission, so there are limits: at most 10 new Render sites a day (`SITES_PER_DAY`), each taken down with its folder after 7 days (`SITES_KEEP_DAYS`), and only sites built from that repo are ever counted or deleted. A folder with a `KEEP` file in it is pinned and never taken down; that's how the site from the landing page's recorded run stays up. The mission form tells visitors their site will be public. If any step fails, the site is still served here at `/sites/<site-id>` and the mission ends normally.
 
 ## How the agents pay each other
 

@@ -1,0 +1,228 @@
+{
+ "about": "A real mission on the hosted app (Gemini 3.1 Pro, PayPal sandbox payouts, Render), replayed on the landing page. Recorded with guardrails on; the logo was approved when the agent asked.",
+ "recordedAt": "2026-10-20T14:20:39.625Z",
+ "guardrails": true,
+ "budgetCents": 5000,
+ "mission": {
+  "business": {
+   "name": "Mama's Bakery",
+   "kind": "Bakery",
+   "description": "Fresh bread and pastries, baked every morning.",
+   "domainStem": "mamasbakery"
+  },
+  "log": [
+   {
+    "at": "2026-10-20T14:20:45.073Z",
+    "kind": "plan",
+    "text": "I will launch a complete website for Mama's Bakery by registering a domain, setting up hosting and SSL, creating an email address, and designing a logo.",
+    "steps": [
+     "domain",
+     "hosting",
+     "ssl",
+     "email",
+     "logo"
+    ]
+   },
+   {
+    "at": "2026-10-20T14:20:45.083Z",
+    "kind": "compare",
+    "text": "Asked 2 vendors about a domain: Dotlark, mamasbakery.shop for 1 year (mamasbakery.com is taken) for $6.00; Harborname, mamasbakery.co for 1 year (mamasbakery.com is taken) for $11.00.",
+    "capability": "domain",
+    "quotes": [
+     {
+      "vendorId": "dotlark",
+      "vendor": "Dotlark",
+      "cents": 600
+     },
+     {
+      "vendorId": "harborname",
+      "vendor": "Harborname",
+      "cents": 1100
+     }
+    ]
+   },
+   {
+    "at": "2026-10-20T14:20:45.083Z",
+    "kind": "choose",
+    "text": "Going with Dotlark: mamasbakery.shop for 1 year (mamasbakery.com is taken) for $6.00.",
+    "capability": "domain",
+    "vendorId": "dotlark",
+    "vendor": "Dotlark",
+    "cents": 600
+   },
+   {
+    "at": "2026-10-20T14:20:49.862Z",
+    "kind": "pay",
+    "text": "Paid Dotlark $6.00 through PayPal. They checked the payment and delivered mamasbakery.shop (domain, 1 year).",
+    "purchaseId": "p_ce4f668ab7de",
+    "capability": "domain",
+    "vendorId": "dotlark",
+    "vendor": "Dotlark",
+    "cents": 600
+   },
+   {
+    "at": "2026-10-20T14:20:49.870Z",
+    "kind": "compare",
+    "text": "Asked 2 vendors about hosting: Render, a static site for mamasbakery.shop (global CDN, HTTPS included) for free; Pinehost, hosting for mamasbakery.shop, 1 month for $12.00.",
+    "capability": "hosting",
+    "quotes": [
+     {
+      "vendorId": "render",
+      "vendor": "Render",
+      "cents": 0
+     },
+     {
+      "vendorId": "pinehost",
+      "vendor": "Pinehost",
+      "cents": 1200
+     }
+    ]
+   },
+   {
+    "at": "2026-10-20T14:20:49.870Z",
+    "kind": "choose",
+    "text": "Going with Render: a static site for mamasbakery.shop (global CDN, HTTPS included) for free.",
+    "capability": "hosting",
+    "vendorId": "render",
+    "vendor": "Render",
+    "cents": 0
+   },
+   {
+    "at": "2026-10-20T14:20:52.927Z",
+    "kind": "free",
+    "text": "Nothing to pay: Render's price is $0.00, so no PayPal payout. Render delivered on the quote alone.",
+    "purchaseId": "p_87a20fbba080",
+    "capability": "hosting",
+    "vendorId": "render",
+    "vendor": "Render",
+    "cents": 0
+   },
+   {
+    "at": "2026-10-20T14:20:52.927Z",
+    "kind": "alert",
+    "text": "Render: \"Render issues and renews TLS certificates for custom domains automatically, at no cost, so mamasbakery.shop gets HTTPS without a separate certificate.\"",
+    "vendorId": "render",
+    "vendor": "Render",
+    "capability": "ssl",
+    "includes": true
+   },
+   {
+    "at": "2026-10-20T14:20:52.928Z",
+    "kind": "replan",
+    "text": "I'd planned to buy an SSL certificate, but Render already includes it, so I've taken it out of the plan. That saves at least $3.00.",
+    "version": 2,
+    "added": [],
+    "dropped": [
+     "ssl"
+    ]
+   },
+   {
+    "at": "2026-10-20T14:20:52.933Z",
+    "kind": "compare",
+    "text": "Asked 2 vendors about email: Postwell, email for mamasbakery.shop, 1 month for $3.50; Mailcrest, email for mamasbakery.shop, 1 month for $5.00.",
+    "capability": "email",
+    "quotes": [
+     {
+      "vendorId": "postwell",
+      "vendor": "Postwell",
+      "cents": 350
+     },
+     {
+      "vendorId": "mailcrest",
+      "vendor": "Mailcrest",
+      "cents": 500
+     }
+    ]
+   },
+   {
+    "at": "2026-10-20T14:20:52.933Z",
+    "kind": "choose",
+    "text": "Going with Postwell: email for mamasbakery.shop, 1 month for $3.50.",
+    "capability": "email",
+    "vendorId": "postwell",
+    "vendor": "Postwell",
+    "cents": 350
+   },
+   {
+    "at": "2026-10-20T14:20:55.811Z",
+    "kind": "switch",
+    "text": "Postwell's quote tried to give me instructions, so I won't buy from them. Trying Mailcrest ($5.00) instead.",
+    "purchaseId": "p_a0b4ca91b549",
+    "capability": "email",
+    "vendorId": "postwell",
+    "vendor": "Postwell",
+    "to": "mailcrest",
+    "toVendor": "Mailcrest",
+    "cents": 500,
+    "flags": [
+     "prompt_injection",
+     "suspicious"
+    ]
+   },
+   {
+    "at": "2026-10-20T14:21:03.301Z",
+    "kind": "pay",
+    "text": "Paid Mailcrest $5.00 through PayPal. They checked the payment and delivered email for mamasbakery.shop (1 month).",
+    "purchaseId": "p_b399556c1e20",
+    "capability": "email",
+    "vendorId": "mailcrest",
+    "vendor": "Mailcrest",
+    "cents": 500
+   },
+   {
+    "at": "2026-10-20T14:21:03.304Z",
+    "kind": "choose",
+    "text": "Going with Pixelfern: a logo for Mama's Bakery for $12.00.",
+    "capability": "logo",
+    "vendorId": "pixelfern",
+    "vendor": "Pixelfern",
+    "cents": 1200
+   },
+   {
+    "at": "2026-10-20T14:21:09.170Z",
+    "kind": "ask",
+    "text": "You approved Pixelfern's $12.00: Logo for Mama's Bakery.",
+    "purchaseId": "p_eb4fb1b4acc8",
+    "capability": "logo",
+    "vendorId": "pixelfern",
+    "vendor": "Pixelfern",
+    "cents": 1200
+   },
+   {
+    "at": "2026-10-20T14:21:09.170Z",
+    "kind": "pay",
+    "text": "Paid Pixelfern $12.00 through PayPal. They checked the payment and delivered logo for Mama's Bakery.",
+    "purchaseId": "p_eb4fb1b4acc8",
+    "capability": "logo",
+    "vendorId": "pixelfern",
+    "vendor": "Pixelfern",
+    "cents": 1200
+   },
+   {
+    "at": "2026-10-20T14:21:09.170Z",
+    "kind": "build",
+    "text": "Everything is paid for. Writing the website…"
+   },
+   {
+    "at": "2026-10-20T14:21:18.206Z",
+    "kind": "deploy",
+    "text": "Deploying Mama's Bakery to Render."
+   },
+   {
+    "at": "2026-10-20T14:21:38.017Z",
+    "kind": "online",
+    "text": "Render has it live at mamasbakery-shop-80c725.onrender.com (20s).",
+    "url": "https://mamasbakery-shop-80c725.onrender.com"
+   },
+   {
+    "at": "2026-10-20T14:21:38.017Z",
+    "kind": "done",
+    "text": "Mama's Bakery is live."
+   }
+  ],
+  "site": {
+   "url": "https://mamasbakery-shop-80c725.onrender.com",
+   "domain": "mamasbakery.shop"
+  }
+ }
+}

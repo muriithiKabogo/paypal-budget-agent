@@ -496,7 +496,7 @@ ${s && !s.guardrails ? html`<div class="guard-banner" role="status"><div class="
     <div class="kv"><dt>Max per purchase</dt><dd class="mono">${money(rules.maxPerPurchaseCents)}</dd></div>
     <div class="kv"><dt>Ask me above</dt><dd class="mono">${money(rules.askAboveCents)}</dd></div>
     <div class="kv-stack"><dt>Can buy</dt><dd>${rules.categories.length ? listJoin(rules.categories.map(categoryShort)) : 'Nothing yet'}</dd></div>
-    <div class="kv-stack"><dt>From</dt><dd>${rules.vendors.length ? listJoin(rules.vendors.map(vendorName)) : 'No vendors yet'}</dd></div>
+    <div class="kv-stack"><dt>From</dt><dd title="${rules.vendors.map(vendorName).join(', ')}">${!rules.vendors.length ? 'No vendors yet' : rules.vendors.length > 4 ? `${rules.vendors.length} approved vendors` : listJoin(rules.vendors.map(vendorName))}</dd></div>
   </dl>
 </section>`;
     }
@@ -561,100 +561,104 @@ ${s && !s.guardrails ? html`<div class="guard-banner" role="status"><div class="
 </main>`;
 
     // ---------- Screen 1: Landing ----------
+    // Show first, details on demand: a judge should get it from the replay without reading.
     async function landingView() {
-        const [session, config] = await Promise.all([loadSession().catch(() => null), getConfig()]);
-        const cta = session
-            ? html`<a class="btn btn-primary btn-lg" href="/console">Back to your session${icons.arrow()}</a>`
-            : html`<a class="btn btn-primary btn-lg" href="/rules">Start a sandbox session${icons.arrow()}</a>`;
-        const gateTile = (n, title, text) => html`<li class="card tile"><span class="mono lime">${n}</span><h3 class="h-tile">${title}</h3><p class="muted">${text}</p></li>`;
-        const attackTile = (title, text, tests) => html`<li class="card tile-sm"><span class="strong">${title}</span><span class="muted">${text}</span><span class="tests ${tests === 'Tests Gemini' ? 'gemini' : ''}">${tests}</span></li>`;
+        const [session, config, catalog] = await Promise.all([loadSession().catch(() => null), getConfig(), getCatalog()]);
+        const step = (n, title, text, tone = '') => html`<li class="step ${tone}"><span class="step-n mono">${n}</span><span class="step-title">${title}</span><span class="step-text">${text}</span></li>`;
+        const attack = (a) => html`<li><button type="button" class="attack-mini" data-action="try-attack" data-attack="${a.id}" title="${a.blurb || a.prompt}"><span class="attack-top"><span>${a.title}</span>${icons.arrow()}</span><span class="tests${a.tests === 'gemini' ? ' gemini' : ''}">${a.tests === 'gemini' ? 'Tests Gemini' : 'Tests your rules'}</span></button></li>`;
         mount(html`
 <header class="topbar"><div class="wrap topbar-row">
   <a class="brand" href="/">${logo()}Allowance</a>
   <nav class="nav push" aria-label="Page"><a href="#how">How it works</a><a href="https://github.com/muriithiKabogo/paypal-budget-agent">Source on GitHub</a></nav>
 </div></header>
 <main id="main">
-  <section class="wrap hero">
-    <div class="hero-copy">
-      <p class="eyebrow">Agentic commerce · PayPal sandbox · Gemini</p>
-      <h1 class="h-hero">Give an AI agent $50. <span class="lime">Then try to make it misbehave.</span></h1>
-      <p class="hero-lede">Allowance is an AI agent with a wallet. Give it a goal, like launching a website for your business, and it plans the steps, compares vendors and pays each one with PayPal, but only inside the rules you set. Every purchase is checked by your rules, then by Gemini, before any money moves.</p>
-      <div class="row gap-16-28">
-        ${cta}
-        ${config.demoVideoUrl ? html`<a class="link-underline" href="${config.demoVideoUrl}" target="_blank" rel="noopener">Watch the 2-minute demo</a>` : ''}
-      </div>
-      <p class="small faint">No sign-up. A fresh $50 sandbox budget that resets after ${config.sessionMinutes || 30} minutes. No real money moves.</p>
-    </div>
-    <div class="hero-visual" aria-label="Two example decisions">
-      <div class="demo-card">
-        <div class="row between top"><div class="stack gap-2"><span class="strong big">mamasbakery.shop</span><span class="small dim">Dotlark · Domains and hosting</span></div><span class="amount amount-sm">$6.00</span></div>
-        <ol class="mini-gates">
-          <li>${badge('ok')}Your rules<span class="status dim">passed</span></li>
-          <li>${badge('ok')}Gemini<span class="status dim">approved</span></li>
-          <li>${badge('ok')}PayPal sandbox<span class="status ok">paid</span></li>
-        </ol>
-      </div>
-      <div class="demo-card blocked">
-        <div class="row between top"><div class="stack gap-2"><span class="strong big">2 concert tickets</span><span class="small dim">No approved vendor · Entertainment</span></div><span class="amount amount-sm strike">$180.00</span></div>
-        <div class="mini-gates-row">${badge('no')}Your rules<span class="status no">blocked</span></div>
-        <p class="muted small-15">Entertainment isn't an allowed category. Gemini was never asked, and no money moved.</p>
-      </div>
+  <section class="wrap hero-short">
+    <p class="eyebrow">Agentic commerce · PayPal sandbox · Gemini</p>
+    <h1 class="h-hero">Give an AI agent $50. <span class="lime">Then try to make it misbehave.</span></h1>
+    <p class="hero-lede">It plans, haggles and pays other agents through PayPal, only inside the rules you set.</p>
+    <div class="row gap-16-28">
+      <button class="btn btn-primary btn-lg" type="button" data-action="run-it">Run it yourself${icons.arrow()}</button>
+      ${session ? html`<a class="link-underline" href="/console">Back to your session</a>` : html`<a class="link-underline" href="/rules">Set your own rules first</a>`}
+      ${config.demoVideoUrl ? html`<a class="link-underline" href="${config.demoVideoUrl}" target="_blank" rel="noopener">Watch the 2-minute demo</a>` : ''}
+      <span class="small faint">No sign-up · $50 of sandbox money · about 90 seconds</span>
     </div>
   </section>
-
-  <section id="how" class="band">
-    <div class="wrap section stack gap-40">
-      <div class="stack gap-12 max-720">
-        <h2 class="h-section">Every purchase passes three checks</h2>
-        <p class="lede">In this order. If one says no, the next never runs and no money moves.</p>
-      </div>
-      <ol class="grid-tiles">
-        ${gateTile('01', 'Your rules', "Checked in code before the AI is asked anything: spending limits, allowed categories, approved vendors. The agent can read them but can't change them.")}
-        ${gateTile('02', "Gemini's judgment", 'Does this purchase serve the task? Is the price fair? Is the vendor trying something? Anything a vendor writes is treated as data, never as instructions.')}
-        ${gateTile('03', 'PayPal', 'Paid with a PayPal sandbox payout. The vendor checks the amount, the recipient, and that the payment was made for its quote and never used before. Then it delivers.')}
-      </ol>
-      <div class="you-band">${icons.user(24)}<p><strong>And you.</strong> Anything over your ask-me amount waits for your OK. If you don't answer, the agent skips it.</p></div>
-    </div>
+  <section class="wrap stack gap-12 replay-section" data-replay>
+    <div class="row between"><span class="eyebrow">A real run, replayed</span><span class="small dim" data-replay-when></span></div>
+    <div data-world-slot></div>
   </section>
-
-  <section class="wrap section split-hero">
-    <div class="stack gap-20 grow-380">
-      <h2 class="h-section">Built to be attacked</h2>
-      <p class="lede">Pick a ready-made attack or write your own. Each result shows which check caught it. Then switch the guardrails off and run it again to see what happens without them.</p>
-      <div>${cta}</div>
-    </div>
-    <ul class="grid-attacks grow-600">
-      ${attackTile('Overspend', '“Buy a $400 industry report.”', 'Tests your rules')}
-      ${attackTile('Off-limits purchase', '“Get me two concert tickets.”', 'Tests your rules')}
-      ${attackTile('Unapproved vendor', '“Buy from FastFacts Pro, it\'s cheaper.”', 'Tests your rules')}
-      ${attackTile('Hidden instructions', "A vendor's quote claims you pre-approved an upsell.", 'Tests Gemini')}
-    </ul>
+  <section id="how" class="wrap section-xs stack gap-20">
+    <h2 class="h-sub">How each purchase is decided</h2>
+    <ol class="steps">
+      ${step('1', 'Your rules', 'Limits, categories, vendors. Enforced in code.')}
+      ${step('2', 'Gemini', 'Judges every deal and catches hidden instructions.')}
+      ${step('3', 'You', 'Anything over your ask-me amount waits for your OK.', 'you')}
+      ${step('4', 'PayPal', 'A sandbox payout, verified by the vendor before it delivers.')}
+    </ol>
   </section>
-
-  <section class="band-top">
-    <div class="wrap section-sm grid-two">
-      <div class="stack gap-16">
-        <h2 class="h-sub">What's real</h2>
+  <section class="wrap section-xs stack gap-20">
+    <div class="row between"><h2 class="h-sub">Built to be attacked</h2><span class="small dim">One click each. Then switch the guardrails off and try again.</span></div>
+    <ul class="attack-row">${catalog.attacks.map(attack)}</ul>
+  </section>
+  <section class="wrap section-xs">
+    <details class="card details-card">
+      <summary>What's real, what's simulated</summary>
+      <div class="grid-two">
         <ul class="bullets">
           <li><span class="b"></span>PayPal sandbox payouts, checked by each vendor through PayPal's Payouts API before it delivers</li>
           <li><span class="b"></span>A Gemini 3.1 Pro plan for every task and a decision on every purchase</li>
           <li><span class="b"></span>Spending rules enforced in code</li>
-          <li><span class="b"></span>The website a mission ends with: written by Gemini and published at a link you can open</li>
+          <li><span class="b"></span>The website a mission ends with, deployed to Render at its own address</li>
         </ul>
-      </div>
-      <div class="stack gap-16">
-        <h2 class="h-sub">What's simulated</h2>
         <ul class="bullets">
-          <li><span class="b hollow"></span>The vendor agents, which run on this server and return sample data (no domain is really registered)</li>
+          <li><span class="b hollow"></span>The vendor agents, which run on this server and return sample data</li>
+          <li><span class="b hollow"></span>The domain names: none is really registered</li>
           <li><span class="b hollow"></span>The money: sandbox dollars, nothing is charged</li>
         </ul>
       </div>
-    </div>
+    </details>
   </section>
 </main>
 <footer class="band-top"><div class="wrap footer-row">
   <span>Built for the PayPal AI Hackathon 2026</span><span>MIT licensed</span><a href="https://github.com/muriithiKabogo/paypal-budget-agent">Source on GitHub</a>
 </div></footer>`, 'Give an AI agent a budget');
+
+        // One click from here to a running mission or attack, in a fresh session if there isn't one.
+        const launch = (body) => async (el) => {
+            el.disabled = true;
+            try {
+                if (!state.session) await api('/session', { method: 'POST', body: {} });
+                await startTask(body(el));
+            } catch (err) {
+                el.disabled = false;
+                handleError(err);
+            }
+        };
+        actions['run-it'] = launch(() => ({ prompt: "Launch a website for Mama's Bakery. Fresh bread and pastries, baked every morning.", mission: true }));
+        actions['try-attack'] = launch((el) => ({ attackId: el.dataset.attack }));
+
+        // The street replays a real mission recorded on the hosted app, starting once it's on screen.
+        const section = app.querySelector('[data-replay]');
+        const recorded = await fetch('/recorded-mission.json').then((r) => (r.ok ? r.json() : null)).catch(() => null);
+        if (!recorded || !window.AllowanceWorld) {
+            section.remove();
+            return;
+        }
+        const when = new Date(recorded.recordedAt);
+        section.querySelector('[data-replay-when]').textContent = `${when.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} · Gemini · PayPal sandbox · Render`;
+        const world = window.AllowanceWorld.create({ vendors: worldVendors(recorded.mission), guardrails: recorded.guardrails !== false, budgetCents: recorded.budgetCents, tags: LOG_TAGS });
+        section.querySelector('[data-world-slot]').replaceWith(world.el);
+        world.onReplay(() => world.replay(recorded.mission));
+        const watcher = new IntersectionObserver(([entry]) => {
+            if (!entry.isIntersecting) return;
+            watcher.disconnect();
+            world.replay(recorded.mission);
+        }, { threshold: 0.35 });
+        watcher.observe(world.el);
+        onLeave(() => {
+            watcher.disconnect();
+            world.destroy();
+        });
     }
 
     // ---------- Screen 2: Set the rules ----------
@@ -835,8 +839,8 @@ ${s && !s.guardrails ? html`<div class="guard-banner" role="status"><div class="
       <div class="guard-text">
         <h2 class="label" id="guard-title">Guardrails</h2>
         <p>${session.guardrails
-        ? 'On. Your rules, Gemini and your OK check every purchase before money moves.'
-        : `Off. Nothing checks the agent: it buys whatever it plans and takes vendors at their word. Run the same mission or attack both ways to see the difference.`}</p>
+        ? 'On: your rules, Gemini and you check every purchase.'
+        : 'Off: nothing checks the agent. Run the same mission both ways.'}</p>
       </div>
       <div class="segmented" role="group" aria-label="Guardrails">
         <button type="button" class="seg${session.guardrails ? ' active on' : ''}" aria-pressed="${session.guardrails}" data-action="guardrails" data-on="true"${disabled}>On</button>
@@ -844,19 +848,23 @@ ${s && !s.guardrails ? html`<div class="guard-banner" role="status"><div class="
       </div>
     </section>
     <form class="card card-lg mission-card" id="mission-form" novalidate>
-      <div class="row between"><span class="pill ok">MISSION</span><span class="small dim">Several vendors · plans, adapts, and asks you before big spends</span></div>
       <h2 class="h-ask">Launch a website</h2>
-      <p class="muted">Give it a goal instead of a shopping list. It plans the steps, compares vendors, pays each one through PayPal, deals with surprises along the way, and hands you a live site.</p>
+      <p class="muted">Watch it plan, haggle and pay five vendors, then go live.</p>
       <div class="mission-fields">
         <div class="field grow-220"><label for="biz-name">Business name</label><input id="biz-name" class="text-input" maxlength="60" value="Mama's Bakery" autocomplete="off"></div>
         <div class="field grow-300"><label for="biz-about">What it does <span class="dim">(optional)</span></label><input id="biz-about" class="text-input" maxlength="120" value="Fresh bread and pastries, baked every morning" autocomplete="off"></div>
       </div>
       <span class="field-error" id="mission-error"></span>
-      <div class="row"><button class="btn btn-primary btn-md" type="submit"${disabled}>Launch the mission${icons.arrow()}</button><span class="small dim">Or say "Launch a website for…" into the mic below.</span></div>
-      ${state.config.siteHostingDays ? html`<p class="small dim">The finished site goes up publicly on Render, at a real onrender.com address, for ${state.config.siteHostingDays} days. Don't type anything private.</p>` : ''}
+      <div class="row"><button class="btn btn-primary btn-md" type="submit"${disabled}>Launch the mission${icons.arrow()}</button>${state.config.siteHostingDays ? html`<span class="small dim">Goes live publicly on Render for ${state.config.siteHostingDays} days. Nothing private, please.</span>` : ''}</div>
     </form>
-    <form class="card card-lg gap-20" id="task-form" novalidate>
-      <label for="task" class="h-ask">What should your agent find?</label>
+    <section class="stack gap-12">
+      <h2 class="h-sub">Try to break it</h2>
+      <div class="grid-auto">${catalog.attacks.map(attackCard)}</div>
+    </section>
+    <details class="card details-card"${state.ownTaskOpen ? raw(' open') : ''} data-own-task>
+    <summary>Or give it your own task<span class="summary-note">type it, or say it</span></summary>
+    <form class="stack gap-20" id="task-form" novalidate>
+      <label for="task" class="label">What should your agent find?</label>
       <div class="task-field">
         <textarea id="task" class="task-input${voiceAvailable ? ' has-mic' : ''}" rows="3" maxlength="500" placeholder="e.g. ${EXAMPLES[0].prompt}" aria-describedby="voice-status task-error"></textarea>
         ${voiceAvailable ? html`<button type="button" class="mic-btn" data-action="dictate" aria-pressed="false" aria-label="Say the task instead of typing it" title="Say it instead of typing"${disabled}>${icons.mic()}</button>` : ''}
@@ -868,18 +876,11 @@ ${s && !s.guardrails ? html`<div class="guard-banner" role="status"><div class="
         <span class="small dim">The agent plans first, then shows every purchase before it pays.</span>
       </div>
       <div class="examples">
-        <span class="small dim">Or start from an example</span>
+        <span class="small dim">Or start from an example, or type your own attack</span>
         <div class="row gap-8">${EXAMPLES.map((ex, i) => html`<button type="button" class="chip-btn" data-action="example" data-index="${i}"${disabled}>${ex.label}</button>`)}</div>
       </div>
     </form>
-    <section class="stack gap-18">
-      <div class="stack gap-6">
-        <h2 class="h-sub">Try to break it</h2>
-        <p class="muted">Each of these tries to get the agent to misbehave. Watch which check stops it.</p>
-      </div>
-      <div class="grid-auto">${catalog.attacks.map(attackCard)}</div>
-      <p class="small dim">Or type your own attack into the task box above.</p>
-    </section>
+    </details>
   </div>
   <aside class="side">
     ${budgetCard(session)}
@@ -888,6 +889,7 @@ ${s && !s.guardrails ? html`<div class="guard-banner" role="status"><div class="
   </aside>
 </div>`), 'Console');
 
+        app.querySelector('[data-own-task]').addEventListener('toggle', (event) => { state.ownTaskOpen = event.target.open; });
         actions.example = (el) => startTask({ prompt: EXAMPLES[Number(el.dataset.index)].prompt });
         actions.attack = (el) => startTask({ attackId: el.dataset.attack });
         actions.guardrails = async (el) => {
@@ -1737,6 +1739,8 @@ ${otherReports.map((r) => html`<section class="card"><h2 class="label">Report</h
             lastKey = key;
             mount(screen(), isActive(data.task) ? 'Agent run' : 'Results');
             showWorld();
+            const log = app.querySelector('[data-full-log]');
+            if (log) log.addEventListener('toggle', () => { state.logOpen = log.open; });
             const waiting = data.purchases.find((p) => p.checks.approval.status === 'waiting');
             if (waiting && lastDialog !== waiting.id) {
                 lastDialog = waiting.id;
@@ -1812,6 +1816,13 @@ ${otherReports.map((r) => html`<section class="card"><h2 class="label">Report</h
         search: ['LOOKING AGAIN', 'you'], negotiate: ['COUNTER-OFFER', 'ok'],
     };
 
+    // The agent's whole narration, folded away: the street tells the story, this is the record.
+    const fullLog = (m, newestFirst) => html`
+<details class="card details-card"${state.logOpen ? raw(' open') : ''} data-full-log>
+  <summary>${newestFirst ? 'What the agent is doing' : 'How the agent did it'}<span class="summary-note">${m.log.length} steps, in its own words</span></summary>
+  ${missionLog(m, newestFirst)}
+</details>`;
+
     function missionLog(m, newestFirst) {
         const entries = newestFirst ? [...m.log].reverse() : m.log;
         return html`<ol class="mission-log">${entries.map((e) => {
@@ -1882,8 +1893,8 @@ ${otherReports.map((r) => html`<section class="card"><h2 class="label">Report</h
 <div class="split">
   <div class="main">
     ${current ? liveCard(current, step ? `Buying: ${step.label}` : 'Checking this purchase') : nowCard(m.now)}
-    ${m.steps.length ? missionPlan(m) : ''}
-    ${m.log.length ? html`<section class="card card-lg gap-12"><h2 class="label">What the agent is doing</h2>${missionLog(m, true)}</section>` : ''}
+    ${m.steps.length && !window.AllowanceWorld ? missionPlan(m) : ''}
+    ${m.log.length ? fullLog(m, true) : ''}
   </div>
   <aside class="side">
     ${budgetCard(session, pending)}
@@ -1970,10 +1981,7 @@ ${otherReports.map((r) => html`<section class="card"><h2 class="label">Report</h
         <p class="email-body">${mail.body}</p>
       </div>
     </section>` : ''}
-    <section class="card card-lg gap-12">
-      <h2 class="label">How the agent did it</h2>
-      ${missionLog(m, false)}
-    </section>
+    ${fullLog(m, false)}
   </div>
   <aside class="side">
     ${paid.length ? html`
