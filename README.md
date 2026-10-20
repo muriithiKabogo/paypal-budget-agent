@@ -6,7 +6,7 @@ Allowance is an AI agent with a wallet. Give it a goal, like *"launch a website 
 
 Built for the PayPal AI Hackathon 2026.
 
-- **Live demo:** [ADD YOUR HOSTED URL]
+- **Live demo:** https://allowance-pi38.onrender.com (hosted on Render's free plan, so the first visit after a quiet spell can take about a minute to wake up)
 - **Demo video:** [ADD YOUR YOUTUBE LINK]
 
 ## What it does
@@ -145,7 +145,9 @@ You need Node.js 20 or later, a PayPal developer account and a Gemini API key.
 
 ## Deploy
 
-The repo includes a `render.yaml` blueprint. On [Render](https://render.com), choose **New → Blueprint**, pick this repo, and fill in the secret values when it asks. The same environment variables as `.env.example` apply.
+The live demo runs on [Render](https://render.com) as a Node web service built from this repo's `main` branch (`npm ci`, then `npm start`, health check `/api/config`), and redeploys when `main` changes. The deploy key for the sites repo is a Render **secret file** at `/etc/secrets/allowance_sites_deploy`; the app uses a private copy of it, since ssh refuses keys that others can read.
+
+To run your own copy, the repo includes a `render.yaml` blueprint: choose **New → Blueprint**, pick this repo, and fill in the secret values when it asks. The same environment variables as `.env.example` apply.
 
 Each visitor gets their own sandbox session: a fresh budget, their own rules and ledger, gone after 30 minutes. Each session can run at most 20 tasks, which keeps a public demo's Gemini usage bounded.
 
