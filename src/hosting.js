@@ -33,8 +33,26 @@ function isConfigured() {
 const repoUrl = () => `https://github.com/${config.sitesRepo}`;
 const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
 
-function git(args, cwd) {
+// ssh refuses a private key that anyone else can read, and a secret file mounted by a host may be,
+// so in that case use a copy only this process can read.
+let keyCopy = null;
+function privateKey() {
     const key = config.sitesDeployKeyFile;
+    if (keyCopy) return keyCopy;
+    const stat = fs.statSync(key);
+    if (stat.uid === process.getuid() && !(stat.mode & 0o077)) return key;
+    keyCopy = path.join(os.tmpdir(), `allowance-sites-key-${process.pid}`);
+    fs.writeFileSync(keyCopy, fs.readFileSync(key), { mode: 0o600 });
+    return keyCopy;
+}
+
+function git(args, cwd) {
+    let key;
+    try {
+        key = privateKey();
+    } catch (err) {
+        return Promise.reject(new HostingError(`can't read the deploy key (${err.message})`));
+    }
     if (key.includes("'")) return Promise.reject(new HostingError('SITES_DEPLOY_KEY_FILE has a quote in it'));
     const ssh = `ssh -i '${key}' -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile='${KNOWN_HOSTS}'`;
     return new Promise((resolve, reject) => {
