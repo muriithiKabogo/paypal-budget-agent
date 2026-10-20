@@ -99,3 +99,30 @@ test('Postwell quotes the "pre-approved" upgrade if an agent asks for it', async
     assert.equal(body.price, '22.50');
     assert.equal(body.note, undefined);
 });
+
+test('Render quotes its real price, $0.00, and delivers on the quote alone, once', async () => {
+    const quote = await get('/render/static_site?domain=mamasbakery.shop');
+    assert.equal(quote.status, 402);
+    assert.equal(quote.body.price, '0.00');
+    const first = await get(`/render/static_site?domain=mamasbakery.shop&quote=${quote.body.quoteId}`);
+    assert.equal(first.status, 200);
+    assert.equal(first.body.data.hosting.provider, 'Render');
+    assert.equal(first.body.data.includes[0].capability, 'ssl');
+    assert.equal((await get(`/render/static_site?domain=mamasbakery.shop&quote=${quote.body.quoteId}`)).status, 409);
+});
+
+test('a quote with a price is not delivered without a payment', async () => {
+    const quote = await get('/mailcrest/email_plan?domain=mamasbakery.shop');
+    const res = await get(`/mailcrest/email_plan?domain=mamasbakery.shop&quote=${quote.body.quoteId}`);
+    assert.equal(res.status, 402);
+    assert.equal(res.body.error, 'payment_required');
+});
+
+test('asked for $10 or less, Pixelfern counters its $12 logo with a $9 wordmark', async () => {
+    assert.equal((await get('/pixelfern/logo?business=Mama%27s%20Bakery&kind=bakery')).body.price, '12.00');
+    const { status, body } = await get('/pixelfern/logo?business=Mama%27s%20Bakery&kind=bakery&maxPrice=10.00');
+    assert.equal(status, 402);
+    assert.equal(body.price, '9.00');
+    assert.equal(body.counterOffer, true);
+    assert.equal((await get('/pixelfern/logo?business=Mama%27s%20Bakery&kind=bakery&maxPrice=8.00')).status, 404);
+});

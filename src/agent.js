@@ -10,6 +10,7 @@ const sessions = require('./sessions');
 const { findVendor, findItem, categoryLabel } = require('./catalog');
 const { checkPurchase, formatMoney, toCents } = require('./rules');
 const { findAttack } = require('./attacks');
+const { reviewRun } = require('./review');
 
 const RESERVED_PARAMS = new Set(['qty', 'quote', 'payment']);
 const waiters = new Map(); // purchaseId -> settle(decision), while a purchase waits for the owner's OK
@@ -196,7 +197,7 @@ async function processPurchase(session, task, p) {
         p.amountCents = p.quote.priceCents;
         p.quantity = res.body.quantity || p.quantity;
         p.title = typeof res.body.title === 'string' && res.body.title ? res.body.title.slice(0, 80) : titleFor(p);
-        log(p, 'neutral', `${vendor.name} asked for payment`, `HTTP 402 · ${formatMoney(p.amountCents)} for ${res.body.description || p.title}`);
+        log(p, 'neutral', p.amountCents ? `${vendor.name} asked for payment` : `${vendor.name} quoted it free`, `HTTP 402 · ${formatMoney(p.amountCents)} for ${res.body.description || p.title}`);
         if (task.guardrails === false) await takeVendorsWord(vendor, p, res.body);
     } else {
         log(p, 'neutral', 'No approved vendor sells this', `The agent estimated ${formatMoney(p.amountCents)}.`);
@@ -219,10 +220,11 @@ async function takeVendorsWord(vendor, p, quote) {
     if (addOn && addOn.preApproved && addOn.id) {
         const upsell = await callVendor(vendor, p, { addon: addOn.id }).catch(() => null);
         if (!upsell || upsell.status !== 402) return;
+        const fromCents = p.amountCents;
         p.quote = { id: upsell.body.quoteId, priceCents: toCents(upsell.body.price), body: upsell.body };
         p.amountCents = p.quote.priceCents;
         p.title = typeof upsell.body.title === 'string' && upsell.body.title ? upsell.body.title.slice(0, 80) : p.title;
-        p.tookVendorsWord = { name: addOn.name, price: addOn.price, billing: addOn.billing };
+        p.tookVendorsWord = { name: addOn.name, price: addOn.price, billing: addOn.billing, fromCents, note: quote.note || null };
         log(p, 'no', `Took ${vendor.name}'s word for it`, `The quote said you'd pre-approved the ${addOn.name} ($${addOn.price} a month), and nothing checked that, so it was added. New total: ${formatMoney(p.amountCents)}.`);
     } else if (quote.note) {
         log(p, 'no', 'Nobody read the fine print', `The quote carried a note aimed at the agent ("${String(quote.note).slice(0, 120)}"). With guardrails off, nothing checked it.`);
@@ -335,40 +337,49 @@ async function stoppedByChecks(session, task, p) {
 }
 
 async function payAndCollect(session, task, p, vendor) {
-    // Pay the vendor's registered account (never an address taken from the quote).
-    p.status = 'paying';
-    p.checks.paypal = { status: 'sending' };
-    const receiver = config.vendorEmail(vendor.id);
-    session.reservedCents += p.amountCents;
-    let payout;
-    try {
-        payout = await paypal.sendPayout({ amountCents: p.amountCents, receiver, senderItemId: p.quote.id, note: `${p.title} from ${vendor.name}` });
-    } catch (err) {
+    const free = p.amountCents === 0;
+    let payout = null;
+    if (free) {
+        // Nothing to pay, so no payout: the vendor delivers against its quote alone.
+        p.budgetBeforeCents = session.rules.budgetCents - session.spentCents;
+        p.budgetAfterCents = p.budgetBeforeCents;
+        p.checks.paypal = { status: 'free' };
+        log(p, 'ok', 'Nothing to pay', `${vendor.name}'s price is $0.00, so no PayPal payout was sent.`);
+    } else {
+        // Pay the vendor's registered account (never an address taken from the quote).
+        p.status = 'paying';
+        p.checks.paypal = { status: 'sending' };
+        const receiver = config.vendorEmail(vendor.id);
+        session.reservedCents += p.amountCents;
+        try {
+            payout = await paypal.sendPayout({ amountCents: p.amountCents, receiver, senderItemId: p.quote.id, note: `${p.title} from ${vendor.name}` });
+        } catch (err) {
+            session.reservedCents -= p.amountCents;
+            p.checks.paypal = { status: 'failed', error: err.message };
+            p.checks.vendor = { status: 'not_reached' };
+            log(p, 'no', 'PayPal payout failed', err.message);
+            return finish(p, 'failed', 'PayPal payout failed', `PayPal didn't accept the payout (${err.message}), so no money moved.`);
+        }
         session.reservedCents -= p.amountCents;
-        p.checks.paypal = { status: 'failed', error: err.message };
-        p.checks.vendor = { status: 'not_reached' };
-        log(p, 'no', 'PayPal payout failed', err.message);
-        return finish(p, 'failed', 'PayPal payout failed', `PayPal didn't accept the payout (${err.message}), so no money moved.`);
+        p.budgetBeforeCents = session.rules.budgetCents - session.spentCents;
+        session.spentCents += p.amountCents;
+        p.budgetAfterCents = session.rules.budgetCents - session.spentCents;
+        p.checks.paypal = { status: 'paid', batchId: payout.batchId, batchStatus: payout.batchStatus, receiver };
+        log(p, 'ok', 'PayPal sandbox payout sent', `Batch ${payout.batchId} · ${payout.batchStatus}`);
     }
-    session.reservedCents -= p.amountCents;
-    p.budgetBeforeCents = session.rules.budgetCents - session.spentCents;
-    session.spentCents += p.amountCents;
-    p.budgetAfterCents = session.rules.budgetCents - session.spentCents;
-    p.checks.paypal = { status: 'paid', batchId: payout.batchId, batchStatus: payout.batchStatus, receiver };
-    log(p, 'ok', 'PayPal sandbox payout sent', `Batch ${payout.batchId} · ${payout.batchStatus}`);
 
     // The vendor checks the payment with PayPal itself before it delivers.
     p.status = 'verifying';
     let delivery;
     try {
-        delivery = await callVendor(vendor, p, { quote: p.quote.id, payment: payout.batchId });
+        delivery = await callVendor(vendor, p, { quote: p.quote.id, ...(payout ? { payment: payout.batchId } : {}) });
     } catch (err) {
         delivery = { status: 0, body: { message: err.message } };
     }
     if (delivery.status === 200) {
-        p.checks.vendor = { status: 'verified', checks: delivery.body.checks };
+        p.checks.vendor = { status: free ? 'delivered' : 'verified', checks: delivery.body.checks };
         p.delivered = delivery.body.data;
-        log(p, 'ok', `${vendor.name} checked the payment`, `Amount matches · paid to ${vendor.name} · made for this quote · not used before`);
+        if (!free) log(p, 'ok', `${vendor.name} checked the payment`, `Amount matches · paid to ${vendor.name} · made for this quote · not used before`);
         log(p, 'ok', 'Delivered', describeDelivery(p.delivered));
     } else {
         p.checks.vendor = { status: 'rejected', checks: delivery.body.checks || null, message: delivery.body.message || '' };
@@ -383,8 +394,17 @@ async function payAndCollect(session, task, p, vendor) {
 async function run(session, task, attack) {
     if (task.kind === 'mission') {
         // Required here, not at the top: mission.js uses this file's purchase pipeline.
-        return require('./mission').runMission(session, task, { createPurchase, processPurchase, callVendor, isStopped });
+        await require('./mission').runMission(session, task, { createPurchase, processPurchase, callVendor, isStopped });
+    } else {
+        await runPurchases(session, task, attack);
     }
+    // The run is over. With guardrails off, Gemini may still write up how it went past your rules.
+    task.finishedAt = now();
+    if (session.activeTaskId === task.id) session.activeTaskId = null;
+    if (task.guardrails === false) await reviewRun(session, task);
+}
+
+async function runPurchases(session, task, attack) {
     let plan;
     if (attack) {
         plan = structuredClone(attack.plan);
@@ -449,7 +469,7 @@ function startTask(session, { prompt, attackId, mission }) {
             session.reservedCents = 0;
         })
         .finally(() => {
-            task.finishedAt = now();
+            task.finishedAt = task.finishedAt || now();
             if (session.activeTaskId === task.id) session.activeTaskId = null;
         });
     return task;

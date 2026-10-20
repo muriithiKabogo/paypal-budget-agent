@@ -31,6 +31,20 @@ module.exports = {
     // clicking the $400 attack a few times can't drain the shared sandbox account.
     unguardedPayoutLimitCents: Math.round((Number(env.UNGUARDED_PAYOUT_LIMIT) || 50) * 100),
     maxVoiceTokensPerSession: 120,
+    // Real hosting for the sites missions build (optional). The page is pushed to its own folder in
+    // a public GitHub repo with a deploy key that can only touch that repo, and Render serves the
+    // folder as a static site. Without all three, sites are only served here at /sites/<slug>.
+    sitesRepo: env.SITES_REPO || '', // owner/name
+    sitesGitUrl: env.SITES_REPO ? `git@github.com:${env.SITES_REPO}.git` : '',
+    sitesDeployKeyFile: env.SITES_DEPLOY_KEY_FILE || '',
+    renderApiKey: env.RENDER_API_KEY || '',
+    // Only needed if the Render key can see more than one workspace.
+    renderOwnerId: env.RENDER_OWNER_ID || '',
+    // Anyone can launch a mission, so new Render sites are capped per day and taken down after a week.
+    sitesPerDay: Number(env.SITES_PER_DAY) || 10,
+    sitesKeepDays: Number(env.SITES_KEEP_DAYS) || 7,
+    // Where "See how it works" on a hosted site links back to. Render sets RENDER_EXTERNAL_URL itself.
+    publicUrl: env.PUBLIC_URL || env.RENDER_EXTERNAL_URL || 'https://github.com/muriithiKabogo/paypal-budget-agent',
     vendorEmail(vendorId) {
         return env[`VENDOR_PAYPAL_EMAIL_${vendorId.toUpperCase()}`] || env.VENDOR_PAYPAL_EMAIL || DEFAULT_VENDOR_EMAIL;
     },

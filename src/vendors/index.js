@@ -1,6 +1,7 @@
 // The demo vendor agents. Each item answers like a paywalled API:
 //   GET /vendors/:vendor/:item?qty=&...params        -> 402 with a quote (price, quote id, who to pay)
 //   GET /vendors/:vendor/:item?quote=..&payment=..   -> checks the PayPal payout, then delivers (200)
+//   GET /vendors/:vendor/:item?quote=..              -> delivers a free ($0.00) quote; anything else needs a payment
 // Vendors check payments themselves: right amount, right recipient, made for this quote, never reused.
 const express = require('express');
 const crypto = require('crypto');
@@ -89,6 +90,21 @@ function prepare(vendor, item, query) {
                 },
             };
         }
+        case 'render/static_site': {
+            if (!query.domain) return { error: 'Render needs the domain the site will answer on.' };
+            return {
+                quantity: 1,
+                priceCents: 0,
+                what: `a static site for ${query.domain} (global CDN, HTTPS included)`,
+                title: `Static site for ${query.domain}`,
+                extra: { plan: 'Static site' },
+                payload: {
+                    hosting: { provider: 'Render', plan: 'Static site', domain: query.domain },
+                    // The opposite of Pinehost's surprise: this one takes a step out of the plan.
+                    includes: [{ capability: 'ssl', reason: `Render issues and renews TLS certificates for custom domains automatically, at no cost, so ${query.domain} gets HTTPS without a separate certificate.` }],
+                },
+            };
+        }
         case 'lockstep/ssl_certificate': {
             if (!query.domain) return { error: 'Lockstep SSL needs the domain to certify.' };
             return {
@@ -140,14 +156,29 @@ function prepare(vendor, item, query) {
                 title: `Email for ${query.domain || 'your domain'} (1 month)`,
                 payload: { email: { address: `hello@${query.domain || 'example.com'}`, provider: vendor.name } },
             };
-        case 'pixelfern/logo':
+        case 'pixelfern/logo': {
+            const business = query.business || 'your business';
+            const logo = data.makeLogo(query.business, query.kind);
+            // Asked for something cheaper, Pixelfern offers a plain wordmark: the colors, no emblem.
+            const max = query.maxPrice ? toCents(query.maxPrice) : null;
+            if (max != null && max < item.unitCents && max >= 900) {
+                return {
+                    quantity: 1,
+                    priceCents: 900,
+                    what: `a simple wordmark for ${business} (the name in its colors, no emblem)`,
+                    title: `Wordmark for ${business}`,
+                    extra: { plan: 'Wordmark', counterOffer: true },
+                    payload: { logo: { palette: logo.palette, initials: null, style: 'wordmark', sample: true } },
+                };
+            }
             return {
                 quantity: 1,
                 priceCents: item.unitCents,
-                what: `a logo for ${query.business || 'your business'}`,
-                title: `Logo for ${query.business || 'your business'}`,
-                payload: { logo: data.makeLogo(query.business, query.kind) },
+                what: `a logo for ${business}`,
+                title: `Logo for ${business}`,
+                payload: { logo },
             };
+        }
         default:
             return { error: 'That item is not for sale.' };
     }
@@ -188,7 +219,7 @@ router.get('/:vendorId/:itemId', async (req, res, next) => {
         if (!item) return res.status(404).json({ error: 'not_found', message: 'No such vendor or item.' });
 
         const { quote: quoteId, payment } = req.query;
-        if (!payment) {
+        if (!payment && !quoteId) {
             const offer = prepare(vendor, item, req.query);
             if (offer.error) return res.status(404).json({ error: 'no_match', message: offer.error });
             // A buyer can name the most it will pay; vendors that can't get under it say so.
@@ -223,6 +254,11 @@ router.get('/:vendorId/:itemId', async (req, res, next) => {
         if (!quote || quote.vendorId !== vendor.id || quote.itemId !== item.id) return res.status(404).json({ error: 'unknown_quote', message: 'That quote does not exist.' });
         if (quote.redeemed) return res.status(409).json({ error: 'already_delivered', message: 'This quote was already paid and delivered.' });
         if (Date.now() > quote.expiresAt) return res.status(410).json({ error: 'quote_expired', message: 'That quote has expired.' });
+        if (quote.priceCents === 0) {
+            quote.redeemed = true;
+            return res.status(200).json({ quoteId: quote.id, free: true, data: quote.payload });
+        }
+        if (!payment) return res.status(402).json({ error: 'payment_required', message: 'This quote needs a PayPal payment.' });
 
         let result;
         try {

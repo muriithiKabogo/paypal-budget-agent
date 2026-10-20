@@ -23,3 +23,10 @@ services:
         value: low
       - key: DEMO_VIDEO_URL
         sync: false
+      # Mission sites on Render. Add the deploy key as a Secret File named allowance_sites_deploy.
+      - key: SITES_REPO
+        value: muriithiKabogo/allowance-sites
+      - key: SITES_DEPLOY_KEY_FILE
+        value: /etc/secrets/allowance_sites_deploy
+      - key: RENDER_API_KEY
+        sync: false

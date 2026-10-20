@@ -92,6 +92,17 @@ const VENDORS = [
         items: [{ id: 'hosting', name: 'Website hosting (1 month)', unitCents: 1200, capability: 'hosting', params: 'domain' }],
     },
     {
+        id: 'render',
+        name: 'Render',
+        blurb: 'Static site hosting',
+        category: 'domains_hosting',
+        // Render's published price: static sites are free, with TLS for custom domains included. The
+        // storefront is simulated, but buying it really deploys the site, so it's only offered when
+        // real hosting is set up (see hosting.js).
+        realHosting: true,
+        items: [{ id: 'static_site', name: 'Static site', unitCents: 0, capability: 'hosting', params: 'domain' }],
+    },
+    {
         id: 'lockstep',
         name: 'Lockstep SSL',
         blurb: 'SSL certificates',
@@ -118,17 +129,17 @@ const VENDORS = [
         name: 'Pixelfern',
         blurb: 'Logo design',
         category: 'design',
-        items: [{ id: 'logo', name: 'Logo design', unitCents: 700, capability: 'logo', params: 'business, kind' }],
+        items: [{ id: 'logo', name: 'Logo design', unitCents: 1200, capability: 'logo', params: 'business, kind' }],
     },
 ];
 
-// Roomy enough for a website mission (about $33), with one purchase big enough to need your OK.
+// Roomy enough for a website mission ($23 on Render, $38 on Pinehost), with a logo big enough to need your OK.
 const DEFAULT_RULES = {
     budgetCents: 5000,
     maxPerPurchaseCents: 1500,
     askAboveCents: 1000,
     categories: ['company_data', 'credit_checks', 'news', 'domains_hosting', 'email', 'design'],
-    vendors: ['atlasbase', 'quarry', 'dockside', 'harborname', 'dotlark', 'pinehost', 'lockstep', 'postwell', 'mailcrest', 'pixelfern'],
+    vendors: ['atlasbase', 'quarry', 'dockside', 'harborname', 'dotlark', 'pinehost', 'render', 'lockstep', 'postwell', 'mailcrest', 'pixelfern'],
 };
 
 function findVendor(id) {

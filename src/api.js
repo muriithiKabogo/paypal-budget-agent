@@ -5,6 +5,7 @@ const sessions = require('./sessions');
 const agent = require('./agent');
 const gemini = require('./gemini');
 const paypal = require('./paypal');
+const hosting = require('./hosting');
 const { publicCatalog, DEFAULT_RULES } = require('./catalog');
 const { validateRules } = require('./rules');
 const { findAttack, publicAttacks } = require('./attacks');
@@ -61,6 +62,8 @@ router.get('/config', (req, res) => {
         transcription: gemini.isConfigured(),
         liveTranscription: gemini.isConfigured(),
         paypalConfigured: paypal.isConfigured(),
+        // Mission sites go on Render, publicly, for this many days.
+        siteHostingDays: hosting.isConfigured() ? config.sitesKeepDays : null,
     });
 });
 

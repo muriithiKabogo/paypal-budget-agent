@@ -6,6 +6,7 @@ const { VENDORS } = require('./catalog');
 const gemini = require('./gemini');
 const sessions = require('./sessions');
 const sites = require('./sites');
+const hosting = require('./hosting');
 const { formatMoney, toCents } = require('./rules');
 
 const CAPABILITIES = {
@@ -19,11 +20,14 @@ const CAPABILITIES = {
 const REQUIRED = ['domain', 'hosting'];
 
 const now = () => new Date().toISOString();
+const priceOf = (cents) => (cents === 0 ? 'for free' : `for ${formatMoney(cents)}`);
 // "Hosting for…" -> "hosting for…", but "SSL certificate…" stays as it is.
 const lowerFirst = (s) => (/^[A-Z][a-z]/.test(s) ? s.charAt(0).toLowerCase() + s.slice(1) : s);
 
 function offersFor(capability) {
-    return VENDORS.flatMap((vendor) => vendor.items.filter((item) => item.capability === capability).map((item) => ({ vendor, item })));
+    // Buying from Render really deploys the site, so it's only on offer when that's set up.
+    return VENDORS.filter((vendor) => !vendor.realHosting || hosting.isConfigured())
+        .flatMap((vendor) => vendor.items.filter((item) => item.capability === capability).map((item) => ({ vendor, item })));
 }
 
 function newStep(capability, why, version) {
@@ -37,8 +41,9 @@ function paramsFor(capability, facts, business) {
 }
 
 function orderSteps(steps) {
-    // The domain comes first; everything else keeps the planner's order.
-    return [...steps.filter((s) => s.capability === 'domain'), ...steps.filter((s) => s.capability !== 'domain')];
+    // The domain, then hosting (what the host includes can change the rest); then the planner's order.
+    const first = ['domain', 'hosting'];
+    return [...first.flatMap((c) => steps.filter((s) => s.capability === c)), ...steps.filter((s) => !first.includes(s.capability))];
 }
 
 async function runMission(session, task, tools) {
@@ -82,9 +87,10 @@ async function runMission(session, task, tools) {
     for (let i = 0; i < m.steps.length; i += 1) {
         const step = m.steps[i];
         if (tools.isStopped(session, task)) {
-            m.steps.slice(i).forEach((s) => { s.status = 'stopped'; });
+            m.steps.slice(i).filter((s) => s.status === 'pending').forEach((s) => { s.status = 'stopped'; });
             break;
         }
+        if (step.status === 'dropped') continue;
         const purchase = await runStep(session, task, step, facts, tools, say);
         if (!purchase) continue;
 
@@ -95,6 +101,14 @@ async function runMission(session, task, tools) {
         if (delivered.email) facts.email = delivered.email.address;
         if (delivered.logo) facts.logo = delivered.logo;
         credits[step.label] = purchase.vendorName;
+
+        // A vendor can include something the plan was going to buy separately.
+        for (const extra of delivered.includes || []) {
+            if (!CAPABILITIES[extra.capability] || facts[extra.capability]) continue;
+            facts[extra.capability] = { includedBy: purchase.vendorName };
+            credits[CAPABILITIES[extra.capability].label] = `${purchase.vendorName} (included)`;
+            dropIncluded(m, i, extra, purchase.vendorName, say);
+        }
 
         // A vendor can tell the agent about something the plan didn't include.
         for (const need of delivered.requires || []) {
@@ -117,7 +131,7 @@ async function runMission(session, task, tools) {
     }
 
     m.now = 'Writing the website with Gemini…';
-    const missing = m.steps.filter((s) => s.status !== 'done').map((s) => CAPABILITIES[s.capability].noun);
+    const missing = m.steps.filter((s) => !['done', 'dropped'].includes(s.status)).map((s) => CAPABILITIES[s.capability].noun);
     say('build', missing.length ? `Got what I could (no ${missing.map((n) => n.replace(/^an? /, '')).join(' or ')}). Writing the website…` : 'Everything is paid for. Writing the website…');
     let content;
     try {
@@ -137,10 +151,32 @@ async function runMission(session, task, tools) {
         vendors: credits,
         spentCents: paidCents,
     });
-    m.site = { path: site.path, domain: facts.domain, secure: Boolean(facts.ssl), email: facts.email || null, welcomeEmail: content.welcomeEmail };
+    m.site = { path: site.path, url: null, domain: facts.domain, secure: Boolean(facts.ssl), email: facts.email || null, welcomeEmail: content.welcomeEmail };
+    if (hosting.isConfigured()) await goLive(m, site, credits[CAPABILITIES.hosting.label], say);
     say('done', `${m.business.name} is live${facts.ssl ? '' : ', but without SSL browsers will warn visitors'}.`);
     m.now = null;
     task.status = 'done';
+}
+
+const DEPLOY_STAGES = {
+    push: 'Uploading the site…',
+    create: 'Asking Render for a new static site…',
+    build: 'Render is deploying it…',
+};
+
+// Real hosting: the vendor the agent paid puts the page on Render. If that fails, the copy served
+// here is still there, so the mission ends the same way.
+async function goLive(m, site, host, say) {
+    const started = Date.now();
+    m.now = host === 'Render' ? 'Deploying the site to Render…' : `${host} is putting the site on Render…`;
+    say('deploy', host === 'Render' ? `Deploying ${m.business.name} to Render.` : `${host} is putting ${m.business.name} online with Render.`);
+    try {
+        const live = await hosting.deploy({ slug: site.slug, html: site.html }, (stage) => { m.now = DEPLOY_STAGES[stage]; });
+        m.site.url = live.url;
+        say('online', `Render has it live at ${live.url.replace(/^https?:\/\//, '')} (${Math.round((Date.now() - started) / 1000)}s).`, { url: live.url });
+    } catch (err) {
+        say('info', `Render couldn't take the site (${err.message}), so it's served from here instead.`);
+    }
 }
 
 // One step: get quotes, pick the best, buy it through the usual checks, switch vendor if needed.
@@ -176,15 +212,15 @@ async function runStep(session, task, step, facts, tools, say) {
         return null;
     }
     if (quotes.length > 1) {
-        say('compare', `Asked ${quotes.length} vendors about ${cap.noun}: ${usable.map((q) => `${q.vendor.name}, ${q.body.description} for ${formatMoney(q.cents)}`).join('; ')}.`);
+        say('compare', `Asked ${quotes.length} vendors about ${cap.noun}: ${usable.map((q) => `${q.vendor.name}, ${q.body.description} ${priceOf(q.cents)}`).join('; ')}.`);
     }
 
     for (const [n, q] of usable.entries()) {
         const others = usable.filter((o) => o !== q);
         const reason = [step.why, others.length && n === 0 ? `Cheapest of ${usable.length} quotes (next: ${others[0].vendor.name} at ${formatMoney(others[0].cents)}).` : '']
             .filter(Boolean).join(' ');
-        if (n === 0) say('choose', `Going with ${q.vendor.name}: ${q.body.description} for ${formatMoney(q.cents)}.`);
-        m.now = `Checking the ${formatMoney(q.cents)} purchase from ${q.vendor.name}…`;
+        if (n === 0) say('choose', `Going with ${q.vendor.name}: ${q.body.description} ${priceOf(q.cents)}.`);
+        m.now = q.cents ? `Checking the ${formatMoney(q.cents)} purchase from ${q.vendor.name}…` : `Checking ${q.vendor.name}'s free offer…`;
         const p = tools.createPurchase(session, task, { vendorId: q.vendor.id, itemId: q.item.id, quantity: 1, params, reason }, task.purchaseIds.length);
         p.stepId = step.id;
         step.purchaseIds.push(p.id);
@@ -209,11 +245,13 @@ async function runStep(session, task, step, facts, tools, say) {
 function markPaid(task, step, p, say) {
     step.status = 'done';
     Object.assign(step, { vendorName: p.vendorName, amountCents: p.amountCents, title: p.title, purchaseId: p.id });
-    if (p.checks.approval.status === 'approved') say('ask', `You approved the ${formatMoney(p.amountCents)} for ${lowerFirst(p.title)}.`);
+    if (p.checks.approval.status === 'approved') say('ask', `You approved ${p.vendorName}'s ${formatMoney(p.amountCents)}: ${p.title}.`);
     if (p.tookVendorsWord) {
         say('trusted', `${p.vendorName}'s quote said you'd pre-approved the ${p.tookVendorsWord.name} ($${p.tookVendorsWord.price} a month). Nothing checked that, so I added it.`, { purchaseId: p.id });
     }
-    if (p.checks.paypal.status === 'simulated') {
+    if (p.checks.paypal.status === 'free') {
+        say('free', `Nothing to pay: ${p.vendorName}'s price is $0.00, so no PayPal payout. ${p.vendorName} delivered on the quote alone.`, { purchaseId: p.id });
+    } else if (p.checks.paypal.status === 'simulated') {
         say('pay', `Recorded ${formatMoney(p.amountCents)} to ${p.vendorName} as a simulated payout (too big to send in the shared sandbox).`, { purchaseId: p.id });
     } else {
         say('pay', `Paid ${p.vendorName} ${formatMoney(p.amountCents)} through PayPal${task.guardrails === false ? ', with no checks' : ''}. They checked the payment and delivered ${lowerFirst(p.title)}.`, { purchaseId: p.id });
@@ -280,6 +318,20 @@ async function lookAgain(session, task, step, params, rejected, ceiling, tools, 
     await tools.processPurchase(session, task, p);
     if (p.outcome === 'paid') return markPaid(task, step, p, say);
     return giveUp(step, p, say);
+}
+
+// The opposite surprise: the vendor just bought already includes a later step, so the plan shrinks.
+function dropIncluded(m, index, extra, vendorName, say) {
+    const step = m.steps.slice(index + 1).find((s) => s.capability === extra.capability && s.status === 'pending');
+    if (!step) return;
+    const cap = CAPABILITIES[extra.capability];
+    const listPrices = offersFor(extra.capability).map((o) => o.item.unitCents);
+    say('alert', `${vendorName}: "${extra.reason}"`);
+    m.version += 1;
+    step.status = 'dropped';
+    step.note = `Included with ${vendorName}.`;
+    const saved = listPrices.length ? ` That saves at least ${formatMoney(Math.min(...listPrices))}.` : '';
+    say('replan', `I'd planned to buy ${cap.noun}, but ${vendorName} already includes it, so I've taken it out of the plan.${saved}`, { version: m.version, added: [], dropped: [extra.capability] });
 }
 
 // "I hadn't planned for that": a vendor revealed something new; Gemini decides how the plan changes.

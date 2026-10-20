@@ -3,9 +3,12 @@
 // escaped, and the logo is redrawn here from its initials and colors rather than trusting markup.
 const crypto = require('crypto');
 const express = require('express');
+const config = require('./config');
 const { paletteFor } = require('./vendors/data');
 
 const MAX_SITES = 500;
+// No scripts, nothing loaded from anywhere, no forms. Also sent with the copy hosted on Render.
+const CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'";
 const sites = new Map(); // slug -> { html, createdAt }
 
 const ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
@@ -34,7 +37,8 @@ function logoSvg(initials, palette, size) {
         + `<text x="60" y="72" text-anchor="middle" font-family="Georgia, serif" font-size="34" font-weight="700" fill="${palette.paper}">${esc(initials)}</text></svg>`;
 }
 
-function render({ business, content, domain, email, logo, secure, vendors, spentCents }) {
+// `home` is where "See how it works" goes: this app, from wherever the page is served.
+function render({ business, content, domain, email, logo, secure, vendors, spentCents }, home = '/') {
     const fromLogo = logo && logo.palette && Object.values(logo.palette).every(isHex) ? logo.palette : null;
     const palette = fromLogo || paletteFor(business.kind);
     const initials = logo && /^[A-Z0-9]{1,2}$/.test(String(logo.initials)) ? logo.initials : null;
@@ -86,7 +90,7 @@ footer { padding: 32px 0 48px; font-size: 14px; opacity: 0.75; }
 </style>
 </head>
 <body>
-<div class="demo"><span>Demo site: planned, paid for and built by an AI agent with PayPal sandbox payouts (${esc(`$${(spentCents / 100).toFixed(2)}`)})</span><a href="/">See how it works</a></div>
+<div class="demo"><span>Demo site: planned, paid for and built by an AI agent with PayPal sandbox payouts (${esc(`$${(spentCents / 100).toFixed(2)}`)})</span><a href="${esc(home)}">See how it works</a></div>
 <div class="address"><span>${secure ? lock : '<b>Not secure</b>'} ${secure ? 'https' : 'http'}://${esc(domain)}</span></div>
 <header class="wrap">
   <div class="brand">${initials ? logoSvg(initials, palette, 40) : '<span class="wordmark" aria-hidden="true"></span>'}${esc(business.name)}</div>
@@ -118,16 +122,17 @@ function publish(details) {
     if (sites.size >= MAX_SITES) sites.delete(sites.keys().next().value);
     const slug = `${String(details.domain).toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${crypto.randomBytes(3).toString('hex')}`;
     sites.set(slug, { html: render(details), createdAt: Date.now() });
-    return { slug, path: `/sites/${slug}` };
+    // `html` is the copy for real hosting, which links back to this app's public address.
+    return { slug, path: `/sites/${slug}`, html: render(details, config.publicUrl) };
 }
 
 const router = express.Router();
 router.get('/:slug', (req, res) => {
     const site = sites.get(req.params.slug);
     if (!site) return res.status(404).type('text').send('This demo site is gone. Demo sites only live in memory, so they disappear when the server restarts.');
-    res.set('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'self'");
+    res.set('Content-Security-Policy', `${CSP}; frame-ancestors 'self'`);
     res.set('X-Content-Type-Options', 'nosniff');
     return res.type('html').send(site.html);
 });
 
-module.exports = { publish, fallbackContent, render, sitesRouter: router };
+module.exports = { publish, fallbackContent, render, CSP, sitesRouter: router };

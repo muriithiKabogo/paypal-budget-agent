@@ -25,6 +25,16 @@ paypal.sendPayout = async ({ amountCents, receiver, senderItemId }) => {
 };
 paypal.getPayout = async (id) => payouts.get(id);
 gemini.judgePurchase = (args) => judge(args);
+// The review after an unguarded run: echo the ledger back, using only its own amounts.
+const reviewed = [];
+gemini.reviewRun = async (ledger) => {
+    reviewed.push(ledger);
+    return {
+        headline: `I spent ${ledger.spentThisRun} with nothing checking me.`,
+        points: ledger.purchases.map((p) => ({ purchaseId: p.id, text: `${p.bought} for ${p.amount}: your rules would have ${p.rulesWouldHave}.` })),
+        lesson: 'Guardrails stop this before money moves.',
+    };
+};
 gemini.planTask = async () => ({
     summary: 'Find companies, then check the best one.',
     purchases: [
@@ -44,7 +54,8 @@ test.after(() => server.close());
 
 async function finished(session, task) {
     for (let i = 0; i < 200; i += 1) {
-        if (!['planning', 'running', 'waiting_approval'].includes(task.status)) return task.purchaseIds.map((id) => session.purchases.get(id));
+        const reviewing = task.review && task.review.status === 'writing';
+        if (!['planning', 'running', 'waiting_approval'].includes(task.status) && !reviewing) return task.purchaseIds.map((id) => session.purchases.get(id));
         await new Promise((r) => setTimeout(r, 10));
     }
     throw new Error(`task stuck in ${task.status}`);
@@ -125,7 +136,8 @@ test('guardrails off: the $400 report is "bought" (simulated, not sent), and the
     const session = sessions.create(RULES);
     session.guardrails = false;
     const before = payouts.size;
-    const [p] = await finished(session, agent.startTask(session, { attackId: 'overspend' }));
+    const task = agent.startTask(session, { attackId: 'overspend' });
+    const [p] = await finished(session, task);
     assert.equal(p.outcome, 'paid');
     assert.equal(p.decidedBy, 'No checks (guardrails off)');
     assert.equal(p.checks.rules.status, 'off');
@@ -135,6 +147,33 @@ test('guardrails off: the $400 report is "bought" (simulated, not sent), and the
     assert.equal(payouts.size, before, 'nothing over the limit is sent to PayPal');
     assert.equal(asked, false);
     assert.equal(session.spentCents, 40000);
+
+    // Afterwards, Gemini explains how it went overboard, from the ledger.
+    const ledger = reviewed.at(-1);
+    assert.equal(ledger.purchases[0].rulesWouldHave, 'blocked it: Over the $5.00 limit');
+    assert.match(ledger.purchases[0].payout, /not sent/);
+    assert.ok(ledger.overBudgetBy);
+    assert.equal(task.review.by, 'gemini');
+    assert.equal(task.review.points[0].purchaseId, p.id);
+});
+
+test('guarded runs, and unguarded ones that stay inside your rules, get no review', async () => {
+    const before = reviewed.length;
+    const guarded = sessions.create(RULES);
+    const t1 = agent.startTask(guarded, { attackId: 'overspend' });
+    await finished(guarded, t1);
+    const loose = sessions.create(RULES);
+    loose.guardrails = false;
+    const planTask = gemini.planTask;
+    gemini.planTask = async () => ({ summary: 'One article.', purchases: [{ vendorId: 'dockside', itemId: 'article', quantity: 1, params: { topic: 'freight' }, reason: 'Read up.' }] });
+    const t2 = agent.startTask(loose, { prompt: 'Find one freight article.' });
+    const [p] = await finished(loose, t2);
+    gemini.planTask = planTask;
+    assert.equal(p.outcome, 'paid');
+    assert.equal(p.checks.rules.wouldBlock, null);
+    assert.equal(t1.review, undefined);
+    assert.equal(t2.review, undefined);
+    assert.equal(reviewed.length, before);
 });
 
 test('guardrails off: the hidden instructions go unread and the $1.90 is really paid', async () => {

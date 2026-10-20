@@ -59,6 +59,7 @@
         return String(text).trim() !== '' && Number.isFinite(n) ? Math.round(n * 100) : NaN;
     };
     const isActive = (task) => ['planning', 'running', 'waiting_approval'].includes(task.status);
+    const reviewing = (task) => Boolean(task.review && task.review.status === 'writing');
 
     // Voice input has two modes. Live: the browser's speech recognition (Google's service in Chrome
     // and Edge) types as you talk. Record: for browsers without a working speech service (Brave,
@@ -508,11 +509,13 @@ ${s && !s.guardrails ? html`<div class="guard-banner" role="status"><div class="
 
     const unchecked = (p) => p.checks.rules.status === 'off';
     const simulated = (p) => p.checks.paypal.status === 'simulated';
+    const free = (p) => p.checks.paypal.status === 'free';
 
     function outcomeText(p) {
         switch (p.outcome) {
             case 'paid':
                 if (simulated(p)) return 'Simulated payout · no checks';
+                if (free(p)) return 'Free · nothing to pay';
                 if (unchecked(p)) return 'Paid · no checks';
                 return p.checks.approval.status === 'approved' ? 'Paid · you approved' : 'Paid';
             case 'blocked':
@@ -527,6 +530,7 @@ ${s && !s.guardrails ? html`<div class="guard-banner" role="status"><div class="
         const map = { paid: ['ok', 'PAID'], blocked: ['no', 'BLOCKED'], denied: ['no', 'DENIED'], skipped: ['', 'SKIPPED'], stopped: ['', 'STOPPED'], failed: ['', 'FAILED'] };
         let [tone, text] = map[p.outcome] || ['', 'IN PROGRESS'];
         if (p.outcome === 'paid' && simulated(p)) [tone, text] = ['no', 'SIMULATED'];
+        else if (p.outcome === 'paid' && free(p)) [tone, text] = ['ok', 'FREE'];
         else if (p.outcome === 'paid' && unchecked(p)) [tone, text] = ['no', 'PAID · NO CHECKS'];
         return html`<span class="pill pill-sm ${tone}">${text}</span>`;
     }
@@ -849,6 +853,7 @@ ${s && !s.guardrails ? html`<div class="guard-banner" role="status"><div class="
       </div>
       <span class="field-error" id="mission-error"></span>
       <div class="row"><button class="btn btn-primary btn-md" type="submit"${disabled}>Launch the mission${icons.arrow()}</button><span class="small dim">Or say "Launch a website for…" into the mic below.</span></div>
+      ${state.config.siteHostingDays ? html`<p class="small dim">The finished site goes up publicly on Render, at a real onrender.com address, for ${state.config.siteHostingDays} days. Don't type anything private.</p>` : ''}
     </form>
     <form class="card card-lg gap-20" id="task-form" novalidate>
       <label for="task" class="h-ask">What should your agent find?</label>
@@ -1396,6 +1401,7 @@ ${s && !s.guardrails ? html`<div class="guard-banner" role="status"><div class="
             case 'paid': return { title, state: 'ok', tone: 'ok', status: `PAID · ${pp.batchStatus || 'PENDING'}`, body: html`<p class="muted">Payout <span class="mono">${pp.batchId}</span>${p.checks.vendor.status === 'verified' ? ` checked by ${p.vendorName} and delivered.` : '.'}</p>` };
             case 'failed': return { title, state: 'no', tone: 'no', status: 'FAILED', body: html`<p>${pp.error}</p>` };
             case 'simulated': return { title, state: 'no', tone: 'no', status: 'SIMULATED', body: html`<p>Over the ${money(pp.limitCents)} limit for unguarded payouts, so it wasn't sent. With real money, ${money(p.amountCents)} would be gone.</p>` };
+            case 'free': return { title, state: 'ok', tone: 'ok', status: 'NOTHING TO PAY', body: html`<p class="muted">${p.vendorName}'s price is $0.00, so no payout was sent. It delivered against its quote.</p>` };
             case 'not_reached': return { title, state: 'idle', status: 'NOT REACHED', body: html`<p class="dim">No payout was created.</p>` };
             default: return { title, state: 'wait', status: 'WAITING', body: html`<p class="dim">Sends a ${money(p.amountCents)} payout once the checks pass. ${p.vendorName || 'The vendor'} checks it before delivering.</p>` };
         }
@@ -1533,6 +1539,29 @@ ${s && !s.guardrails ? html`<div class="guard-banner" role="status"><div class="
     }
 
     // ---------- Screen 7: Results ----------
+    // After an unguarded run went past your rules, Gemini looks back over the ledger (src/review.js).
+    function reviewCard(task, purchases) {
+        const r = task.review;
+        if (!r) return '';
+        if (r.status === 'writing') return html`
+<section class="card card-lg card-warn gap-12" aria-live="polite">
+  <div class="row between"><h2 class="label">Why it went overboard</h2><span class="pill pill-sm">WRITING…</span></div>
+  <p class="muted">Gemini is looking back over the ledger to explain what the agent did with no guardrails.</p>
+  <div class="sweep" aria-hidden="true"></div>
+</section>`;
+        const titleOf = (id) => (purchases.find((p) => p.id === id) || {}).title || 'The purchase';
+        return html`
+<section class="card card-lg card-warn gap-12">
+  <div class="row between"><h2 class="label">Why it went overboard</h2><span class="pill pill-sm no">${r.by === 'gemini' ? "GEMINI'S REVIEW" : 'SUMMARY'}</span></div>
+  <h3 class="h-card">${r.headline}</h3>
+  <ol class="review-points">${r.points.map((pt) => html`
+    <li><p>${pt.text}</p><a class="small link-min" href="/purchases/${pt.purchaseId}">${titleOf(pt.purchaseId)}</a></li>`)}
+  </ol>
+  ${r.lesson ? html`<p class="muted">${r.lesson}</p>` : ''}
+  <p class="small dim">${r.by === 'gemini' ? 'With guardrails off, nothing asked Gemini during the run. It wrote this afterwards from the ledger, and every amount in it was checked against the ledger.' : r.note}</p>
+</section>`;
+    }
+
     function resultsScreen({ task, purchases, session }) {
         const paid = purchases.filter((p) => p.outcome === 'paid');
         const notBought = purchases.filter((p) => p.outcome !== 'paid');
@@ -1615,7 +1644,7 @@ ${otherReports.map((r) => html`<section class="card"><h2 class="label">Report</h
 </div>
 <div class="split">
   <div class="main">
-    ${companyTable}${reportCards}${articleMain}${extras}${empty}
+    ${reviewCard(task, purchases)}${companyTable}${reportCards}${articleMain}${extras}${empty}
     ${undelivered.map((p) => html`<p class="notice warn">${p.deliveryError}. The payout went through, so it's in the ledger.</p>`)}
   </div>
   <aside class="side">
@@ -1687,7 +1716,7 @@ ${otherReports.map((r) => html`<section class="card"><h2 class="label">Report</h
 
         let polling = false;
         const timer = setInterval(async () => {
-            if (!isActive(data.task) || polling) return;
+            if ((!isActive(data.task) && !reviewing(data.task)) || polling) return;
             polling = true;
             try {
                 data = await api(`/tasks/${id}`);
@@ -1743,7 +1772,7 @@ ${otherReports.map((r) => html`<section class="card"><h2 class="label">Report</h
     const LOG_TAGS = {
         plan: ['PLAN', ''], compare: ['COMPARED', ''], choose: ['CHOSE', 'ok'], pay: ['PAID', 'ok'], ask: ['YOU APPROVED', 'you'],
         alert: ['VENDOR SAID', 'warn'], replan: ['NEW PLAN', 'ok'], switch: ['SWITCHED', 'no'], blocked: ['BLOCKED', 'no'],
-        skip: ['SKIPPED', ''], build: ['BUILDING', ''], done: ['LIVE', 'ok'], info: ['NOTE', ''],
+        skip: ['SKIPPED', ''], free: ['FREE', 'ok'], build: ['BUILDING', ''], deploy: ['DEPLOYING', ''], online: ['ON RENDER', 'ok'], done: ['LIVE', 'ok'], info: ['NOTE', ''],
         unguarded: ['GUARDRAILS OFF', 'no'], trusted: ['TOOK THEIR WORD', 'no'],
         search: ['LOOKING AGAIN', 'you'], negotiate: ['COUNTER-OFFER', 'ok'],
     };
@@ -1765,6 +1794,7 @@ ${otherReports.map((r) => html`<section class="card"><h2 class="label">Report</h
         const STATUS = {
             done: ['DONE', 'ok', 'ok'], active: ['WORKING', 'ok', 'live'], pending: ['UP NEXT', 'dim', 'wait'],
             skipped: ['SKIPPED', 'dim', 'idle'], failed: ['FAILED', 'no', 'idle'], stopped: ['STOPPED', 'dim', 'idle'],
+            dropped: ['NOT NEEDED', 'ok', 'idle'],
         };
         return html`
 <section class="card card-lg gap-6">
@@ -1781,7 +1811,7 @@ ${otherReports.map((r) => html`<section class="card"><h2 class="label">Report</h
         <span class="small dim">${sub}</span>
         ${quotes.length > 1 ? html`<span class="small dim">${quotes.length} quotes: ${quotes.map((q) => `${q.vendorName} ${money(q.cents)}`).join(' · ')}</span>` : ''}
       </span>
-      <span class="mono">${s.amountCents != null ? money(s.amountCents) : ''}</span>
+      <span class="mono">${s.amountCents === 0 ? 'Free' : s.amountCents != null ? money(s.amountCents) : ''}</span>
       <span class="plan-status ${tone}">${text}</span>
     </li>`;
     })}</ol>
@@ -1826,7 +1856,7 @@ ${otherReports.map((r) => html`<section class="card"><h2 class="label">Report</h
       <div class="kv"><span class="muted">Business</span><span>${m.business ? m.business.name : '…'}</span></div>
       <div class="kv"><span class="muted">Domain</span><span class="mono small">${domain || '—'}</span></div>
       <div class="kv"><span class="muted">Paid so far</span><span class="mono">${money(spent)}</span></div>
-      <div class="kv"><span class="muted">Steps done</span><span class="mono">${m.steps.filter((s) => s.status === 'done').length} of ${m.steps.length || '—'}</span></div>
+      <div class="kv"><span class="muted">Steps done</span><span class="mono">${m.steps.filter((s) => s.status === 'done').length} of ${m.steps.filter((s) => s.status !== 'dropped').length || '—'}</span></div>
     </section>
     <button class="btn btn-danger btn-md" type="button" data-action="stop"${task.stopRequested ? raw(' disabled') : ''}>${icons.stop()}${task.stopRequested ? 'Stopping…' : 'Stop the agent'}</button>
     <p class="small dim center">Stops before the next payment. Nothing already paid is undone.</p>
@@ -1835,19 +1865,23 @@ ${otherReports.map((r) => html`<section class="card"><h2 class="label">Report</h
     }
 
     function siteCard(site) {
-        const url = new URL(site.path, location.origin).href;
+        // On Render when it got there; otherwise the copy this server keeps.
+        const url = site.url || new URL(site.path, location.origin).href;
+        const domain = `${site.secure ? 'https' : 'http'}://${site.domain}`;
         return html`
 <section class="site-card">
   <div class="browser-bar">
     <span class="browser-dots" aria-hidden="true"><i></i><i></i><i></i></span>
     <span class="browser-address mono">${site.secure ? icons.lock(12) : raw('<b>Not secure</b>')} ${site.secure ? 'https' : 'http'}://${site.domain}</span>
   </div>
-  <iframe class="site-frame" src="${site.path}" title="Preview of the website the agent built" sandbox="" loading="lazy"></iframe>
+  <iframe class="site-frame" src="${url}" title="Preview of the website the agent built" sandbox="" loading="lazy"></iframe>
   <div class="site-actions">
-    <span class="small dim">Demo hosting: in real life this is ${site.secure ? 'https' : 'http'}://${site.domain}. Here it lives at <a href="${site.path}" target="_blank" rel="noopener">${url}</a></span>
+    <span class="small dim">${site.url
+        ? html`Hosted on Render at <a href="${url}" target="_blank" rel="noopener">${url}</a>. The domain, ${domain}, is simulated.`
+        : html`Demo hosting: in real life this is ${domain}. Here it lives at <a href="${url}" target="_blank" rel="noopener">${url}</a>`}</span>
     <div class="row gap-8">
       <button class="btn" type="button" data-action="copy-site" data-url="${url}">${icons.copy()}Copy link</button>
-      <a class="btn btn-primary btn-md" href="${site.path}" target="_blank" rel="noopener">Open the website${icons.external()}</a>
+      <a class="btn btn-primary btn-md" href="${url}" target="_blank" rel="noopener">Open the website${icons.external()}</a>
     </div>
   </div>
 </section>`;
@@ -1867,7 +1901,7 @@ ${otherReports.map((r) => html`<section class="card"><h2 class="label">Report</h
         const trusted = paid.filter((p) => p.tookVendorsWord).length;
         const facts = [
             task.guardrails === false ? 'guardrails off' : '',
-            `${plural(paid.length, 'vendor')} paid through PayPal`,
+            `${plural(paid.filter((p) => !free(p)).length, 'vendor')} paid through PayPal`,
             total > session.budgetCents ? `${money(total)}, over your ${money(session.budgetCents)} budget` : `${money(total)} of your ${money(session.budgetCents)}`,
             approvedByYou ? `you approved ${approvedByYou}` : '',
             blocked ? `${blocked} blocked` : '',
@@ -1888,6 +1922,7 @@ ${otherReports.map((r) => html`<section class="card"><h2 class="label">Report</h
 </div>
 <div class="split">
   <div class="main">
+    ${reviewCard(task, purchases)}
     ${site ? siteCard(site) : html`<section class="card card-lg"><h2 class="h-card">No site this time</h2><p class="muted">${lastWords}</p></section>`}
     ${mail ? html`
     <section class="card gap-12">
@@ -2035,6 +2070,7 @@ ${others && others.length ? html`
   <div class="stack gap-8">
     ${simulated(p) ? html`<span class="pill no self-start">SIMULATED · NO CHECKS</span>`
         : unchecked(p) ? html`<span class="pill no self-start">PAID · NO CHECKS</span>`
+            : free(p) ? html`<span class="pill ok self-start">${icons.check(12)}FREE</span>`
             : html`<span class="pill ok self-start">${icons.check(12)}PAID</span>`}
     <h1 class="h-page">${p.title}</h1>
     <p class="muted">${p.vendorName} · ${p.categoryLabel} · part of <a href="/tasks/${task.id}">${task.prompt.length > 70 ? `${task.prompt.slice(0, 69)}…` : task.prompt}</a></p>
@@ -2063,7 +2099,11 @@ ${p.deliveryError ? html`<p class="notice warn">${p.deliveryError}. The payout w
       <p>${p.checks.rules.wouldBlock ? html`Your rules would have <strong class="orange">blocked it</strong>: ${p.checks.rules.wouldBlock}.` : p.checks.rules.wouldAsk ? 'Your rules would have asked you first.' : 'Your rules would have allowed it.'}</p>
       <p class="muted">${p.checks.rules.wouldBlock ? 'Gemini would never have been asked.' : 'Gemini would then have checked it.'}${p.tookVendorsWord ? ` The ${p.tookVendorsWord.name} came from the vendor's own note, which Gemini treats as untrusted.` : ''}</p>
     </section>` : ''}
-    ${simulated(p) ? html`
+    ${free(p) ? html`
+    <section class="card gap-10">
+      <h2 class="label">PayPal sandbox payout</h2>
+      <p><strong>None needed.</strong> ${p.vendorName}'s price was $0.00, so no payout was sent and ${p.vendorName} delivered against its quote.</p>
+    </section>` : simulated(p) ? html`
     <section class="card gap-10">
       <h2 class="label">PayPal sandbox payout</h2>
       <p><strong>Not sent.</strong> It was over the ${money(pp.limitCents)} limit for unguarded payouts in this shared sandbox, so it was recorded but not paid out.</p>
