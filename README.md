@@ -38,6 +38,8 @@ On the console, **Launch a website** (or say "Launch a website for…" into the 
 6. **Asks you** before paying Pixelfern $12 for a logo, because it's over your $10 ask-me amount.
 7. **Goes live on Render.** Gemini writes the site, which is pushed to its own folder in [allowance-sites](https://github.com/muriithiKabogo/allowance-sites) and deployed as its own Render static site, so the bakery gets a real `onrender.com` address, with a welcome email ready to send. The domain stays simulated.
 
+**Watch it happen.** The mission screen draws the run as a night-market street: the agent walks from shop to shop with its guard (Gemini), price tags pop up, coins fly to each vendor as PayPal payouts go out, Postwell gets a red ✕, Pixelfern haggles, and the site rises on the empty lot at the end of the street with a LIVE flag and its real Render address. Every scene comes from a real entry in the mission log, and a finished mission has a **Watch the journey** button to replay it (`public/world.js`: plain SVG and the Web Animations API, no libraries).
+
 That's $23 through PayPal to three vendors. Render's quote uses its published pricing; the storefront the agent talks to is simulated, and the deploy is real. Without Render set up, Render isn't offered: the agent pays Pinehost $12 instead (asking you first), Pinehost insists on HTTPS, and the SSL certificate comes from Lockstep SSL, about $38 in all.
 
 Every step goes through the same checks as any other purchase, and the agent narrates each decision as it makes it. Your rules shape the mission: turn off the "Design" category and it launches the site without a logo.
@@ -176,7 +178,7 @@ src/
   attacks.js       The ready-made attacks
   vendors/         The demo vendor agents (402 quotes, payment checks) and their sample data
   vendor.js        Optional: run the vendors as their own service (npm run vendors)
-public/            The web app (index.html, app.js, style.css)
+public/            The web app (index.html, app.js, style.css, and world.js: the mission drawn as a street)
 test/              node:test suites
 list_models.js     Lists the Gemini models your key can use (npm run list-models)
 ```
