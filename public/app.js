@@ -1679,6 +1679,17 @@ ${otherReports.map((r) => html`<section class="card"><h2 class="label">Report</h
 </section>`);
     }
 
+    // The street for the agent's world (world.js): every vendor that sells a mission step. Render
+    // only appears when real hosting is on, or when the mission used it.
+    function worldVendors(mission) {
+        const used = new Set(((mission && mission.log) || []).flatMap((e) => [e.vendorId, e.to, ...(e.quotes || []).map((q) => q.vendorId)]).filter(Boolean));
+        return state.catalog.vendors.flatMap((v) => {
+            const item = v.items.find((i) => i.capability);
+            if (!item || (v.realHosting && !state.config.siteHostingDays && !used.has(v.id))) return [];
+            return [{ id: v.id, name: v.name, capability: item.capability }];
+        });
+    }
+
     async function taskView(id) {
         const session = await requireSession();
         if (!session) return;
@@ -1686,6 +1697,26 @@ ${otherReports.map((r) => html`<section class="card"><h2 class="label">Report</h
         let data = await api(`/tasks/${id}`);
         let lastKey = '';
         let lastDialog = null;
+        let world = null;
+
+        // One world per mission page. Each repaint replaces the screen, so it's moved into the new one.
+        const showWorld = () => {
+            const { task, purchases } = data;
+            if (task.kind !== 'mission' || !window.AllowanceWorld) return;
+            if (!world) {
+                world = window.AllowanceWorld.create({ vendors: worldVendors(task.mission), guardrails: task.guardrails !== false, budgetCents: data.session.budgetCents, tags: LOG_TAGS });
+                world.onReplay(() => world.replay(data.task.mission));
+            }
+            const waiting = purchases.find((p) => p.checks.approval.status === 'waiting');
+            const checking = purchases.find((p) => p.status === 'gemini');
+            const m = task.mission;
+            const now = waiting ? { text: `Waiting for your OK: ${waiting.vendorName}, ${money(waiting.amountCents)}`, approval: true }
+                : checking ? { text: `Gemini is checking ${checking.vendorName}'s quote…`, guard: true }
+                    : m && m.now ? { text: m.now } : null;
+            world.update({ mission: m, active: isActive(task), now });
+            const slot = app.querySelector('[data-world-slot]');
+            if (slot) slot.replaceWith(world.el);
+        };
 
         const screen = () => {
             const { task, purchases } = data;
@@ -1705,6 +1736,7 @@ ${otherReports.map((r) => html`<section class="card"><h2 class="label">Report</h
             if (key === lastKey) return;
             lastKey = key;
             mount(screen(), isActive(data.task) ? 'Agent run' : 'Results');
+            showWorld();
             const waiting = data.purchases.find((p) => p.checks.approval.status === 'waiting');
             if (waiting && lastDialog !== waiting.id) {
                 lastDialog = waiting.id;
@@ -1727,7 +1759,10 @@ ${otherReports.map((r) => html`<section class="card"><h2 class="label">Report</h
                 polling = false;
             }
         }, 1000);
-        onLeave(() => clearInterval(timer));
+        onLeave(() => {
+            clearInterval(timer);
+            if (world) world.destroy();
+        });
 
         const decide = async (el, decision) => {
             el.closest('.dialog').querySelectorAll('button').forEach((b) => { b.disabled = true; });
@@ -1843,6 +1878,7 @@ ${otherReports.map((r) => html`<section class="card"><h2 class="label">Report</h
   <h1 class="h-task">${task.prompt}</h1>
   ${task.summary ? html`<p class="muted">${task.summary}</p>` : ''}
 </div>
+<div data-world-slot></div>
 <div class="split">
   <div class="main">
     ${current ? liveCard(current, step ? `Buying: ${step.label}` : 'Checking this purchase') : nowCard(m.now)}
@@ -1920,6 +1956,7 @@ ${otherReports.map((r) => html`<section class="card"><h2 class="label">Report</h
   <h1 class="h-page">${site ? html`<span class="lime">${name}</span> is live.` : task.status === 'stopped' ? 'You stopped the mission.' : "The site didn't launch."}</h1>
   <p class="lede">${facts}</p>
 </div>
+<div data-world-slot></div>
 <div class="split">
   <div class="main">
     ${reviewCard(task, purchases)}

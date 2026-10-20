@@ -163,7 +163,8 @@ function publicCatalog() {
             name: v.name,
             blurb: v.blurb,
             category: v.category,
-            items: v.items.filter((i) => !i.hidden).map(({ id, name, unitCents }) => ({ id, name, unitCents })),
+            realHosting: Boolean(v.realHosting),
+            items: v.items.filter((i) => !i.hidden).map(({ id, name, unitCents, capability }) => ({ id, name, unitCents, capability: capability || null })),
         })),
         defaults: DEFAULT_RULES,
     };

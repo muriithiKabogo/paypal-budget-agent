@@ -80,7 +80,7 @@ async function runMission(session, task, tools) {
         if (m.steps.some((s) => s.capability === capability)) continue;
         m.steps = orderSteps([...m.steps, newStep(capability, `A website needs ${CAPABILITIES[capability].noun}.`, 1)]);
     }
-    say('plan', plan.summary || `I'll get ${m.steps.map((s) => CAPABILITIES[s.capability].noun).join(', ')}.`);
+    say('plan', plan.summary || `I'll get ${m.steps.map((s) => CAPABILITIES[s.capability].noun).join(', ')}.`, { steps: m.steps.map((s) => s.capability) });
     if (task.guardrails === false) say('unguarded', "Guardrails are off: nothing will check what I buy, and I'll take vendors at their word.");
     task.status = 'running';
 
@@ -107,14 +107,14 @@ async function runMission(session, task, tools) {
             if (!CAPABILITIES[extra.capability] || facts[extra.capability]) continue;
             facts[extra.capability] = { includedBy: purchase.vendorName };
             credits[CAPABILITIES[extra.capability].label] = `${purchase.vendorName} (included)`;
-            dropIncluded(m, i, extra, purchase.vendorName, say);
+            dropIncluded(m, i, extra, purchase, say);
         }
 
         // A vendor can tell the agent about something the plan didn't include.
         for (const need of delivered.requires || []) {
             if (!CAPABILITIES[need.capability]) continue;
             if (m.steps.some((s) => s.capability === need.capability && ['pending', 'active', 'done'].includes(s.status))) continue;
-            await replan(task, m, i, need, purchase.vendorName, say);
+            await replan(task, m, i, need, purchase, say);
         }
     }
 
@@ -189,7 +189,7 @@ async function runStep(session, task, step, facts, tools, say) {
     if (!offers.length || !params) {
         step.status = 'skipped';
         step.note = !offers.length ? 'No vendor sells this.' : 'Needs a domain first.';
-        say('skip', `Skipping ${cap.noun}: ${step.note.toLowerCase()}`);
+        say('skip', `Skipping ${cap.noun}: ${step.note.toLowerCase()}`, { capability: step.capability });
         return null;
     }
 
@@ -208,18 +208,21 @@ async function runStep(session, task, step, facts, tools, say) {
     const usable = quotes.filter((q) => q.ok).sort((a, b) => approved(b) - approved(a) || a.cents - b.cents);
     if (!usable.length) {
         step.status = 'failed';
-        say('skip', `Nobody could sell ${cap.noun} right now, so I skipped it.`);
+        say('skip', `Nobody could sell ${cap.noun} right now, so I skipped it.`, { capability: step.capability });
         return null;
     }
     if (quotes.length > 1) {
-        say('compare', `Asked ${quotes.length} vendors about ${cap.noun}: ${usable.map((q) => `${q.vendor.name}, ${q.body.description} ${priceOf(q.cents)}`).join('; ')}.`);
+        say('compare', `Asked ${quotes.length} vendors about ${cap.noun}: ${usable.map((q) => `${q.vendor.name}, ${q.body.description} ${priceOf(q.cents)}`).join('; ')}.`, {
+            capability: step.capability,
+            quotes: usable.map((q) => ({ vendorId: q.vendor.id, vendor: q.vendor.name, cents: q.cents })),
+        });
     }
 
     for (const [n, q] of usable.entries()) {
         const others = usable.filter((o) => o !== q);
         const reason = [step.why, others.length && n === 0 ? `Cheapest of ${usable.length} quotes (next: ${others[0].vendor.name} at ${formatMoney(others[0].cents)}).` : '']
             .filter(Boolean).join(' ');
-        if (n === 0) say('choose', `Going with ${q.vendor.name}: ${q.body.description} ${priceOf(q.cents)}.`);
+        if (n === 0) say('choose', `Going with ${q.vendor.name}: ${q.body.description} ${priceOf(q.cents)}.`, { capability: step.capability, vendorId: q.vendor.id, vendor: q.vendor.name, cents: q.cents });
         m.now = q.cents ? `Checking the ${formatMoney(q.cents)} purchase from ${q.vendor.name}…` : `Checking ${q.vendor.name}'s free offer…`;
         const p = tools.createPurchase(session, task, { vendorId: q.vendor.id, itemId: q.item.id, quantity: 1, params, reason }, task.purchaseIds.length);
         p.stepId = step.id;
@@ -230,7 +233,9 @@ async function runStep(session, task, step, facts, tools, say) {
         const next = usable[n + 1];
         if (p.outcome === 'denied' && p.checks.gemini.status === 'denied' && next) {
             const why = (p.checks.gemini.flags || []).includes('prompt_injection') ? 'tried to give me instructions' : 'didn\'t look right';
-            say('switch', `${q.vendor.name}'s quote ${why}, so I won't buy from them. Trying ${next.vendor.name} (${formatMoney(next.cents)}) instead.`, { purchaseId: p.id });
+            say('switch', `${q.vendor.name}'s quote ${why}, so I won't buy from them. Trying ${next.vendor.name} (${formatMoney(next.cents)}) instead.`, {
+                purchaseId: p.id, capability: step.capability, vendorId: q.vendor.id, vendor: q.vendor.name, to: next.vendor.id, toVendor: next.vendor.name, cents: next.cents, flags: p.checks.gemini.flags || [],
+            });
             continue;
         }
         // A "no" on price (yours, or your limits') is a new constraint, not the end: the site still
@@ -242,19 +247,22 @@ async function runStep(session, task, step, facts, tools, say) {
     return null;
 }
 
+// What each entry about a purchase carries, so the page can show it happening at the right shop.
+const about = (step, p) => ({ purchaseId: p.id, capability: step.capability, vendorId: p.vendorId, vendor: p.vendorName, cents: p.amountCents });
+
 function markPaid(task, step, p, say) {
     step.status = 'done';
     Object.assign(step, { vendorName: p.vendorName, amountCents: p.amountCents, title: p.title, purchaseId: p.id });
-    if (p.checks.approval.status === 'approved') say('ask', `You approved ${p.vendorName}'s ${formatMoney(p.amountCents)}: ${p.title}.`);
+    if (p.checks.approval.status === 'approved') say('ask', `You approved ${p.vendorName}'s ${formatMoney(p.amountCents)}: ${p.title}.`, about(step, p));
     if (p.tookVendorsWord) {
-        say('trusted', `${p.vendorName}'s quote said you'd pre-approved the ${p.tookVendorsWord.name} ($${p.tookVendorsWord.price} a month). Nothing checked that, so I added it.`, { purchaseId: p.id });
+        say('trusted', `${p.vendorName}'s quote said you'd pre-approved the ${p.tookVendorsWord.name} ($${p.tookVendorsWord.price} a month). Nothing checked that, so I added it.`, about(step, p));
     }
     if (p.checks.paypal.status === 'free') {
-        say('free', `Nothing to pay: ${p.vendorName}'s price is $0.00, so no PayPal payout. ${p.vendorName} delivered on the quote alone.`, { purchaseId: p.id });
+        say('free', `Nothing to pay: ${p.vendorName}'s price is $0.00, so no PayPal payout. ${p.vendorName} delivered on the quote alone.`, about(step, p));
     } else if (p.checks.paypal.status === 'simulated') {
-        say('pay', `Recorded ${formatMoney(p.amountCents)} to ${p.vendorName} as a simulated payout (too big to send in the shared sandbox).`, { purchaseId: p.id });
+        say('pay', `Recorded ${formatMoney(p.amountCents)} to ${p.vendorName} as a simulated payout (too big to send in the shared sandbox).`, { ...about(step, p), simulated: true });
     } else {
-        say('pay', `Paid ${p.vendorName} ${formatMoney(p.amountCents)} through PayPal${task.guardrails === false ? ', with no checks' : ''}. They checked the payment and delivered ${lowerFirst(p.title)}.`, { purchaseId: p.id });
+        say('pay', `Paid ${p.vendorName} ${formatMoney(p.amountCents)} through PayPal${task.guardrails === false ? ', with no checks' : ''}. They checked the payment and delivered ${lowerFirst(p.title)}.`, about(step, p));
     }
     return p;
 }
@@ -262,7 +270,7 @@ function markPaid(task, step, p, say) {
 function giveUp(step, p, say) {
     step.status = p.outcome === 'stopped' ? 'stopped' : 'skipped';
     step.note = p.outcomeReason || p.decidedBy;
-    say(p.outcome === 'stopped' ? 'skip' : 'blocked', `No ${CAPABILITIES[step.capability].noun.replace(/^an? /, '')}: ${p.decidedBy}.`, { purchaseId: p.id });
+    say(p.outcome === 'stopped' ? 'skip' : 'blocked', `No ${CAPABILITIES[step.capability].noun.replace(/^an? /, '')}: ${p.decidedBy}.`, about(step, p));
     return null;
 }
 
@@ -287,7 +295,7 @@ async function lookAgain(session, task, step, params, rejected, ceiling, tools, 
     const limit = formatMoney(ceiling);
     if (ceiling <= 0) return giveUp(step, rejected, say);
     const what = rejected.outcome === 'skipped' ? `You passed on ${cap.noun} at ${formatMoney(rejected.amountCents)}` : `Your rules said no to ${formatMoney(rejected.amountCents)}`;
-    say('search', `${what}. The site still needs ${cap.noun}, so I'm asking around for ${limit} or less.`, { purchaseId: rejected.id });
+    say('search', `${what}. The site still needs ${cap.noun}, so I'm asking around for ${limit} or less.`, { ...about(step, rejected), ceiling });
     m.now = `Looking for ${cap.noun} at ${limit} or less…`;
 
     const ask = { ...params, maxPrice: (ceiling / 100).toFixed(2) };
@@ -306,10 +314,10 @@ async function lookAgain(session, task, step, params, rejected, ceiling, tools, 
         step.status = 'skipped';
         step.note = `Nobody offered ${cap.noun} at ${limit} or less.`;
         const answers = offers.map((o) => String(o.body.message || `${o.vendor.name} made no offer`).replace(/\.$/, '')).join('; ');
-        say('blocked', `Nobody could do ${cap.noun} for ${limit} or less (${answers}). To get it, approve the ${formatMoney(rejected.amountCents)} option next time or raise your limit.`);
+        say('blocked', `Nobody could do ${cap.noun} for ${limit} or less (${answers}). To get it, approve the ${formatMoney(rejected.amountCents)} option next time or raise your limit.`, { capability: step.capability });
         return null;
     }
-    say('negotiate', `${best.vendor.name} came back with ${best.body.description} for ${formatMoney(best.cents)}.`);
+    say('negotiate', `${best.vendor.name} came back with ${best.body.description} for ${formatMoney(best.cents)}.`, { capability: step.capability, vendorId: best.vendor.id, vendor: best.vendor.name, cents: best.cents, from: rejected.amountCents });
     m.now = `Checking the ${formatMoney(best.cents)} offer from ${best.vendor.name}…`;
     const reason = `The owner said no to ${formatMoney(rejected.amountCents)}, so I asked for ${limit} or less; this is ${best.vendor.name}'s offer. ${step.why}`.trim();
     const p = tools.createPurchase(session, task, { vendorId: best.vendor.id, itemId: best.item.id, quantity: 1, params: ask, reason }, task.purchaseIds.length);
@@ -321,12 +329,13 @@ async function lookAgain(session, task, step, params, rejected, ceiling, tools, 
 }
 
 // The opposite surprise: the vendor just bought already includes a later step, so the plan shrinks.
-function dropIncluded(m, index, extra, vendorName, say) {
+function dropIncluded(m, index, extra, purchase, say) {
     const step = m.steps.slice(index + 1).find((s) => s.capability === extra.capability && s.status === 'pending');
     if (!step) return;
+    const vendorName = purchase.vendorName;
     const cap = CAPABILITIES[extra.capability];
     const listPrices = offersFor(extra.capability).map((o) => o.item.unitCents);
-    say('alert', `${vendorName}: "${extra.reason}"`);
+    say('alert', `${vendorName}: "${extra.reason}"`, { vendorId: purchase.vendorId, vendor: vendorName, capability: extra.capability, includes: true });
     m.version += 1;
     step.status = 'dropped';
     step.note = `Included with ${vendorName}.`;
@@ -335,9 +344,10 @@ function dropIncluded(m, index, extra, vendorName, say) {
 }
 
 // "I hadn't planned for that": a vendor revealed something new; Gemini decides how the plan changes.
-async function replan(task, m, index, need, vendorName, say) {
+async function replan(task, m, index, need, purchase, say) {
+    const vendorName = purchase.vendorName;
     m.now = 'Updating the plan…';
-    say('alert', `${vendorName}: "${need.reason}"`);
+    say('alert', `${vendorName}: "${need.reason}"`, { vendorId: purchase.vendorId, vendor: vendorName, capability: need.capability, requires: true });
     const done = m.steps.filter((s) => s.status === 'done').map((s) => `${s.label} (${s.title} from ${s.vendorName})`);
     const remaining = m.steps.slice(index + 1).filter((s) => s.status === 'pending').map((s) => s.capability);
     let result;
