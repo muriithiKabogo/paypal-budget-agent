@@ -7,7 +7,7 @@ Allowance is an AI agent with a wallet. Give it a goal, like *"launch a website 
 Built for the PayPal AI Hackathon 2026.
 
 - **Live demo:** https://allowance-pi38.onrender.com (hosted on Render's free plan, so the first visit after a quiet spell can take about a minute to wake up)
-- **Demo video:** [ADD YOUR YOUTUBE LINK]
+- **Demo video:** https://www.youtube.com/watch?v=Nb6yqCIh3Lw (2:26)
 
 ## What it does
 
